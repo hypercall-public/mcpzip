@@ -66,7 +66,7 @@ func migrateConfig(claudeCfg *config.ClaudeCodeConfig, outputPath string) error 
 		return fmt.Errorf("creating config directory: %w", err)
 	}
 
-	if err := os.WriteFile(outputPath, data, 0644); err != nil {
+	if err := os.WriteFile(outputPath, data, 0600); err != nil {
 		return fmt.Errorf("writing config: %w", err)
 	}
 

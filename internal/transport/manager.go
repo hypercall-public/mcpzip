@@ -20,6 +20,7 @@ type Manager struct {
 	mu          sync.RWMutex
 	idleTimeout time.Duration
 	stopReaper  chan struct{}
+	closeOnce   sync.Once
 	connect     ConnectFunc
 }
 
@@ -52,23 +53,10 @@ func (m *Manager) GetUpstream(ctx context.Context, serverName string) (Upstream,
 		return nil, fmt.Errorf("unknown server: %s", serverName)
 	}
 
-	// Fast path: check if we already have a live connection.
-	m.mu.RLock()
-	entry, exists := m.pool[serverName]
-	m.mu.RUnlock()
-
-	if exists && entry.upstream.Alive() {
-		m.mu.Lock()
-		entry.lastUsed = time.Now()
-		m.mu.Unlock()
-		return entry.upstream, nil
-	}
-
-	// Slow path: create a new connection.
+	// Try to return a live pooled connection.
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Double-check after acquiring write lock.
 	if entry, exists := m.pool[serverName]; exists && entry.upstream.Alive() {
 		entry.lastUsed = time.Now()
 		return entry.upstream, nil
@@ -155,8 +143,9 @@ func (m *Manager) ListToolsAll(ctx context.Context) (map[string][]types.ToolEntr
 }
 
 // Close shuts down all pooled connections and stops the reaper.
+// Safe to call multiple times.
 func (m *Manager) Close() error {
-	close(m.stopReaper)
+	m.closeOnce.Do(func() { close(m.stopReaper) })
 
 	m.mu.Lock()
 	defer m.mu.Unlock()

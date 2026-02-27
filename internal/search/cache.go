@@ -3,6 +3,7 @@
 package search
 
 import (
+	"strings"
 	"sync"
 
 	"github.com/hypercall-public/mcpzip/internal/types"
@@ -87,12 +88,5 @@ func normalizeQuery(q string) string {
 
 // joinTokens joins tokens with a single space.
 func joinTokens(tokens []string) string {
-	result := ""
-	for i, t := range tokens {
-		if i > 0 {
-			result += " "
-		}
-		result += t
-	}
-	return result
+	return strings.Join(tokens, " ")
 }

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/hypercall-public/mcpzip/internal/catalog"
@@ -32,10 +33,10 @@ func runServe(args []string) error {
 
 	fmt.Fprintf(os.Stderr, "mcpzip: starting proxy (%d servers)\n", len(cfg.MCPServers))
 
-	// Resolve Gemini API key: config -> env.
-	apiKey := cfg.GeminiAPIKey
+	// Resolve Gemini API key: env -> config (env takes precedence).
+	apiKey := os.Getenv("GEMINI_API_KEY")
 	if apiKey == "" {
-		apiKey = os.Getenv("GEMINI_API_KEY")
+		apiKey = cfg.GeminiAPIKey
 	}
 
 	// Create transport manager.
@@ -61,6 +62,8 @@ func runServe(args []string) error {
 	searcher := search.NewSearcher(apiKey, model, catalogFn)
 
 	// Create proxy server.
+	// TODO: Wire into go-sdk MCP server with stdio transport.
+	// Currently the proxy logic works but isn't connected to MCP protocol layer.
 	_ = proxy.New(cat, searcher, tm)
 
 	fmt.Fprintf(os.Stderr, "mcpzip: loaded %d tools from cache\n", cat.ToolCount())
@@ -79,7 +82,7 @@ func runServe(args []string) error {
 
 	// Wait for interrupt.
 	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 	<-sig
 	fmt.Fprintf(os.Stderr, "\nmcpzip: shutting down\n")
 	return nil

@@ -34,5 +34,5 @@ func writeCache(path string, entries []types.ToolEntry) error {
 	if err != nil {
 		return fmt.Errorf("marshaling cache: %w", err)
 	}
-	return os.WriteFile(path, data, 0644)
+	return os.WriteFile(path, data, 0600)
 }

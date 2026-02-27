@@ -28,7 +28,10 @@ type ExecuteToolArgs struct {
 	Arguments json.RawMessage `json:"arguments"`
 }
 
-const defaultSearchLimit = 5
+const (
+	defaultSearchLimit = 5
+	maxSearchLimit     = 50
+)
 
 // HandleSearchTools implements the search_tools meta-tool.
 func (s *Server) HandleSearchTools(ctx context.Context, rawArgs json.RawMessage) (string, error) {
@@ -42,6 +45,8 @@ func (s *Server) HandleSearchTools(ctx context.Context, rawArgs json.RawMessage)
 	limit := args.Limit
 	if limit <= 0 {
 		limit = defaultSearchLimit
+	} else if limit > maxSearchLimit {
+		limit = maxSearchLimit
 	}
 
 	results, err := s.searcher.Search(ctx, args.Query, limit)
@@ -120,18 +125,17 @@ func (s *Server) HandleExecuteTool(ctx context.Context, rawArgs json.RawMessage)
 		return nil, fmt.Errorf("name is required")
 	}
 
-	// Verify tool exists in catalog.
-	tool, err := s.catalog.GetTool(args.Name)
-	if err != nil {
-		return nil, err
-	}
-
-	// Handle admin tools.
-	switch tool.OriginalName {
+	// Handle admin tools before catalog lookup (they may not be in the catalog).
+	switch args.Name {
 	case "proxy_status":
 		return s.handleProxyStatus()
 	case "proxy_refresh":
 		return s.handleProxyRefresh(ctx)
+	}
+
+	// Verify tool exists in catalog.
+	if _, err := s.catalog.GetTool(args.Name); err != nil {
+		return nil, err
 	}
 
 	// Parse the prefixed name to get server and original tool name.
@@ -142,7 +146,7 @@ func (s *Server) HandleExecuteTool(ctx context.Context, rawArgs json.RawMessage)
 
 	result, err := s.transport.CallTool(ctx, serverName, toolName, args.Arguments)
 	if err != nil {
-		return nil, fmt.Errorf("executing %s on %s: %w", toolName, serverName, err)
+		return nil, fmt.Errorf("executing %q on %q: %w", toolName, serverName, err)
 	}
 	return result, nil
 }

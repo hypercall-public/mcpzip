@@ -228,3 +228,37 @@ func TestHandleExecuteTool_InvalidArgs(t *testing.T) {
 		t.Error("expected error for invalid JSON args")
 	}
 }
+
+func TestHandleExecuteTool_ProxyStatus(t *testing.T) {
+	s := setupTestServer()
+	defer s.transport.Close()
+
+	args := json.RawMessage(`{"name": "proxy_status", "arguments": {}}`)
+	result, err := s.HandleExecuteTool(context.Background(), args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var resp struct {
+		ToolCount   int      `json:"tool_count"`
+		ServerNames []string `json:"server_names"`
+	}
+	if err := json.Unmarshal(result, &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.ToolCount != 2 {
+		t.Errorf("tool count = %d, want 2", resp.ToolCount)
+	}
+}
+
+func TestHandleSearchTools_LimitCapped(t *testing.T) {
+	s := setupTestServer()
+	defer s.transport.Close()
+
+	// Request limit 9999 - should be capped to maxSearchLimit.
+	args := json.RawMessage(`{"query": "slack", "limit": 9999}`)
+	_, err := s.HandleSearchTools(context.Background(), args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// No panic/OOM is the test - it should work fine.
+}
