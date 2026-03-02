@@ -44,7 +44,7 @@ func setupTestServer() *Server {
 	mockConnect := func(ctx context.Context, name string, cfg types.ServerConfig) (transport.Upstream, error) {
 		return &mockUpstream{name: name}, nil
 	}
-	tm := transport.NewManager(configs, 0, mockConnect)
+	tm := transport.NewManager(configs, 0, 0, mockConnect)
 
 	return New(cat, searcher, tm)
 }
@@ -216,6 +216,29 @@ func TestHandleExecuteTool_EmptyName(t *testing.T) {
 	_, err := s.HandleExecuteTool(context.Background(), args)
 	if err == nil {
 		t.Error("expected error for empty name")
+	}
+}
+
+func TestHandleExecuteTool_StringArguments(t *testing.T) {
+	s := setupTestServer()
+	defer s.transport.Close()
+
+	// LLMs sometimes send arguments as a JSON string instead of an object.
+	args := json.RawMessage(`{"name": "slack__send_message", "arguments": "{\"channel\": \"#general\", \"text\": \"hello\"}"}`)
+	result, err := s.HandleExecuteTool(context.Background(), args)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var resp map[string]string
+	if err := json.Unmarshal(result, &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["server"] != "slack" {
+		t.Errorf("expected server=slack, got %q", resp["server"])
+	}
+	if resp["tool"] != "send_message" {
+		t.Errorf("expected tool=send_message, got %q", resp["tool"])
 	}
 }
 

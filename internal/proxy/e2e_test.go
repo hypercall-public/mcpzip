@@ -37,7 +37,7 @@ func TestE2E_CachePersistence(t *testing.T) {
 		return &mockUpstreamForIntegration{serverName: name, tools: tools[name]}, nil
 	}
 
-	tm1 := transport.NewManager(configs, 10*time.Minute, mockConnect)
+	tm1 := transport.NewManager(configs, 10*time.Minute, 0, mockConnect)
 	cat1 := catalog.New(tm1, cachePath)
 	if err := cat1.RefreshAll(context.Background()); err != nil {
 		t.Fatal(err)
@@ -93,7 +93,7 @@ func TestE2E_ProxyLifecycle(t *testing.T) {
 	}
 
 	// Startup.
-	tm := transport.NewManager(configs, 10*time.Minute, mockConnect)
+	tm := transport.NewManager(configs, 10*time.Minute, 0, mockConnect)
 	defer tm.Close()
 
 	cat := catalog.New(tm, cachePath)
@@ -161,7 +161,7 @@ func TestE2E_UpstreamFailure(t *testing.T) {
 		return &mockUpstreamForIntegration{serverName: name, tools: tools[name]}, nil
 	}
 
-	tm := transport.NewManager(configs, 10*time.Minute, mockConnect)
+	tm := transport.NewManager(configs, 10*time.Minute, 0, mockConnect)
 	defer tm.Close()
 
 	cat := catalog.New(tm, "")
@@ -187,7 +187,7 @@ func TestE2E_EmptyCatalogSearch(t *testing.T) {
 	cat := catalog.New(nil, "")
 	catalogFn := func() []types.ToolEntry { return cat.AllTools() }
 	searcher := search.NewSearcher("", "", catalogFn)
-	tm := transport.NewManager(nil, 10*time.Minute, nil)
+	tm := transport.NewManager(nil, 10*time.Minute, 0, nil)
 	defer tm.Close()
 
 	srv := proxy.New(cat, searcher, tm)
@@ -220,7 +220,7 @@ func TestE2E_LargeToolCatalog(t *testing.T) {
 		return &mockUpstreamForIntegration{serverName: name, tools: tools[name]}, nil
 	}
 
-	tm := transport.NewManager(configs, 10*time.Minute, mockConnect)
+	tm := transport.NewManager(configs, 10*time.Minute, 0, mockConnect)
 	defer tm.Close()
 
 	cat := catalog.New(tm, "")

@@ -86,7 +86,7 @@ func buildIntegrationProxy(t *testing.T) *proxy.Server {
 		return upstreams[name], nil
 	}
 
-	tm := transport.NewManager(configs, 10*time.Minute, mockConnect)
+	tm := transport.NewManager(configs, 10*time.Minute, 0, mockConnect)
 	t.Cleanup(func() { tm.Close() })
 
 	cat := catalog.New(tm, "")

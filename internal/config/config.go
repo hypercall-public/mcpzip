@@ -16,6 +16,7 @@ const (
 	configFile = "config.json"
 	cacheDir   = "cache"
 	cacheFile  = "tools.json"
+	authDir    = "auth"
 )
 
 // DefaultPath returns the default config file path:
@@ -30,6 +31,13 @@ func DefaultPath() string {
 func CachePath() string {
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".config", configDir, cacheDir, cacheFile)
+}
+
+// AuthDir returns the directory for OAuth token storage:
+// ~/.config/compressed-mcp-proxy/auth/
+func AuthDir() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".config", configDir, authDir)
 }
 
 // Load reads and validates a proxy config from the given path.
@@ -61,12 +69,12 @@ func validate(cfg *types.ProxyConfig) error {
 			if sc.Command == "" {
 				return fmt.Errorf("server %q: stdio server must have a command", name)
 			}
-		case "http":
+		case "http", "sse":
 			if sc.URL == "" {
-				return fmt.Errorf("server %q: http server must have a url", name)
+				return fmt.Errorf("server %q: %s server must have a url", name, sc.EffectiveType())
 			}
 		default:
-			return fmt.Errorf("server %q: unsupported type %q (must be \"stdio\" or \"http\")", name, sc.Type)
+			return fmt.Errorf("server %q: unsupported type %q (must be \"stdio\", \"http\", or \"sse\")", name, sc.Type)
 		}
 	}
 	return nil
@@ -105,6 +113,17 @@ func LoadClaudeCodeConfigFrom(path string) (*ClaudeCodeConfig, error) {
 		return nil, fmt.Errorf("no MCP servers found in %s", path)
 	}
 	return &cfg, nil
+}
+
+// FindClaudeCodeConfigPath returns the path to Claude Code's config file.
+// It checks common locations and returns the first one that exists and contains MCP servers.
+func FindClaudeCodeConfigPath() (string, error) {
+	for _, p := range claudeCodeConfigPaths() {
+		if _, err := os.Stat(p); err == nil {
+			return p, nil
+		}
+	}
+	return "", fmt.Errorf("no Claude Code config found (checked %v)", claudeCodeConfigPaths())
 }
 
 func claudeCodeConfigPaths() []string {

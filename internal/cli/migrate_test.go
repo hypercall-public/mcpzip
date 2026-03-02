@@ -23,8 +23,8 @@ func TestMigrateConfig_Basic(t *testing.T) {
 		},
 	}
 
-	if err := migrateConfig(claudeCfg, outputPath); err != nil {
-		t.Fatalf("migrateConfig() error: %v", err)
+	if err := writeProxyConfig(claudeCfg, outputPath); err != nil {
+		t.Fatalf("writeProxyConfig() error: %v", err)
 	}
 
 	// Verify written file is valid JSON and contains the servers.
@@ -59,8 +59,8 @@ func TestMigrateConfig_EmptyServers(t *testing.T) {
 		MCPServers: map[string]types.ServerConfig{},
 	}
 
-	if err := migrateConfig(claudeCfg, outputPath); err != nil {
-		t.Fatalf("migrateConfig() error: %v", err)
+	if err := writeProxyConfig(claudeCfg, outputPath); err != nil {
+		t.Fatalf("writeProxyConfig() error: %v", err)
 	}
 
 	data, err := os.ReadFile(outputPath)
@@ -88,8 +88,8 @@ func TestMigrateConfig_CreatesDirectory(t *testing.T) {
 		},
 	}
 
-	if err := migrateConfig(claudeCfg, outputPath); err != nil {
-		t.Fatalf("migrateConfig() error: %v", err)
+	if err := writeProxyConfig(claudeCfg, outputPath); err != nil {
+		t.Fatalf("writeProxyConfig() error: %v", err)
 	}
 
 	if _, err := os.Stat(outputPath); err != nil {
@@ -107,8 +107,8 @@ func TestMigrateConfig_PreservesHTTPServers(t *testing.T) {
 		},
 	}
 
-	if err := migrateConfig(claudeCfg, outputPath); err != nil {
-		t.Fatalf("migrateConfig() error: %v", err)
+	if err := writeProxyConfig(claudeCfg, outputPath); err != nil {
+		t.Fatalf("writeProxyConfig() error: %v", err)
 	}
 
 	data, err := os.ReadFile(outputPath)

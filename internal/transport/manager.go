@@ -19,6 +19,7 @@ type Manager struct {
 	pool        map[string]*poolEntry
 	mu          sync.RWMutex
 	idleTimeout time.Duration
+	callTimeout time.Duration
 	stopReaper  chan struct{}
 	closeOnce   sync.Once
 	connect     ConnectFunc
@@ -30,7 +31,8 @@ type poolEntry struct {
 }
 
 // NewManager creates a new transport manager and starts the idle reaper.
-func NewManager(configs map[string]types.ServerConfig, idleTimeout time.Duration, connect ConnectFunc) *Manager {
+// callTimeout is optional — if zero, tool calls use the caller's context deadline only.
+func NewManager(configs map[string]types.ServerConfig, idleTimeout, callTimeout time.Duration, connect ConnectFunc) *Manager {
 	if connect == nil {
 		connect = DefaultConnect
 	}
@@ -38,6 +40,7 @@ func NewManager(configs map[string]types.ServerConfig, idleTimeout time.Duration
 		configs:     configs,
 		pool:        make(map[string]*poolEntry),
 		idleTimeout: idleTimeout,
+		callTimeout: callTimeout,
 		stopReaper:  make(chan struct{}),
 		connect:     connect,
 	}
@@ -81,13 +84,58 @@ func (m *Manager) GetUpstream(ctx context.Context, serverName string) (Upstream,
 }
 
 // CallTool is a convenience method that gets the upstream for a server and
-// invokes the named tool.
+// invokes the named tool. If the call fails, it evicts the stale connection
+// and retries once with a fresh connection.
 func (m *Manager) CallTool(ctx context.Context, serverName, toolName string, args json.RawMessage) (json.RawMessage, error) {
 	upstream, err := m.GetUpstream(ctx, serverName)
 	if err != nil {
 		return nil, err
 	}
-	return upstream.CallTool(ctx, toolName, args)
+
+	callCtx := ctx
+	if m.callTimeout > 0 {
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithTimeout(ctx, m.callTimeout)
+		defer cancel()
+	}
+
+	result, err := upstream.CallTool(callCtx, toolName, args)
+	if err == nil {
+		return result, nil
+	}
+
+	// Call failed — connection may be stale (e.g. upstream server restarted).
+	// Evict from pool and retry once with a fresh connection.
+	m.evict(serverName)
+
+	upstream, err2 := m.GetUpstream(ctx, serverName)
+	if err2 != nil {
+		return nil, err // return original error
+	}
+
+	// Fresh context for retry — the original callCtx may have been cancelled.
+	retryCtx := ctx
+	if m.callTimeout > 0 {
+		var cancel context.CancelFunc
+		retryCtx, cancel = context.WithTimeout(ctx, m.callTimeout)
+		defer cancel()
+	}
+
+	result, err2 = upstream.CallTool(retryCtx, toolName, args)
+	if err2 != nil {
+		return nil, err2
+	}
+	return result, nil
+}
+
+// evict closes and removes a connection from the pool.
+func (m *Manager) evict(serverName string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if entry, exists := m.pool[serverName]; exists {
+		_ = entry.upstream.Close()
+		delete(m.pool, serverName)
+	}
 }
 
 // ListToolsAll lists tools from all configured servers concurrently.

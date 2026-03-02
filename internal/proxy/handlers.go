@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/hypercall-public/mcpzip/internal/types"
 )
@@ -26,6 +27,7 @@ type DescribeToolArgs struct {
 type ExecuteToolArgs struct {
 	Name      string          `json:"name"`
 	Arguments json.RawMessage `json:"arguments"`
+	Timeout   int             `json:"timeout,omitempty"` // seconds
 }
 
 const (
@@ -125,6 +127,15 @@ func (s *Server) HandleExecuteTool(ctx context.Context, rawArgs json.RawMessage)
 		return nil, fmt.Errorf("name is required")
 	}
 
+	// LLMs sometimes double-encode arguments as a JSON string instead of an object.
+	// Unwrap one level: "{\"key\":\"val\"}" → {"key":"val"}
+	if len(args.Arguments) > 0 && args.Arguments[0] == '"' {
+		var s string
+		if err := json.Unmarshal(args.Arguments, &s); err == nil {
+			args.Arguments = json.RawMessage(s)
+		}
+	}
+
 	// Handle admin tools before catalog lookup (they may not be in the catalog).
 	switch args.Name {
 	case "proxy_status":
@@ -144,7 +155,14 @@ func (s *Server) HandleExecuteTool(ctx context.Context, rawArgs json.RawMessage)
 		return nil, fmt.Errorf("invalid tool name %q: %w", args.Name, err)
 	}
 
-	result, err := s.transport.CallTool(ctx, serverName, toolName, args.Arguments)
+	callCtx := ctx
+	if args.Timeout > 0 {
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithTimeout(ctx, time.Duration(args.Timeout)*time.Second)
+		defer cancel()
+	}
+
+	result, err := s.transport.CallTool(callCtx, serverName, toolName, args.Arguments)
 	if err != nil {
 		return nil, fmt.Errorf("executing %q on %q: %w", toolName, serverName, err)
 	}

@@ -87,7 +87,7 @@ func TestGetUpstream_CreatesNewConnection(t *testing.T) {
 		"server1": {Command: "echo"},
 	}
 
-	mgr := NewManager(configs, 5*time.Minute, mockConnectFunc(mocks))
+	mgr := NewManager(configs, 5*time.Minute, 0, mockConnectFunc(mocks))
 	defer mgr.Close()
 
 	upstream, err := mgr.GetUpstream(context.Background(), "server1")
@@ -112,7 +112,7 @@ func TestGetUpstream_ReusesPooledConnection(t *testing.T) {
 		"server1": {Command: "echo"},
 	}
 
-	mgr := NewManager(configs, 5*time.Minute, factory)
+	mgr := NewManager(configs, 5*time.Minute, 0, factory)
 	defer mgr.Close()
 
 	_, err := mgr.GetUpstream(context.Background(), "server1")
@@ -147,7 +147,7 @@ func TestGetUpstream_CreatesNewIfNotAlive(t *testing.T) {
 		"server1": {Command: "echo"},
 	}
 
-	mgr := NewManager(configs, 5*time.Minute, factory)
+	mgr := NewManager(configs, 5*time.Minute, 0, factory)
 	defer mgr.Close()
 
 	u1, err := mgr.GetUpstream(context.Background(), "server1")
@@ -182,7 +182,7 @@ func TestGetUpstream_CreatesNewIfNotAlive(t *testing.T) {
 
 func TestGetUpstream_UnknownServer(t *testing.T) {
 	configs := map[string]types.ServerConfig{}
-	mgr := NewManager(configs, 5*time.Minute, DefaultConnect)
+	mgr := NewManager(configs, 5*time.Minute, 0, DefaultConnect)
 	defer mgr.Close()
 
 	_, err := mgr.GetUpstream(context.Background(), "nonexistent")
@@ -207,7 +207,7 @@ func TestCallTool_RoutesToCorrectUpstream(t *testing.T) {
 		"serverB": {Command: "b"},
 	}
 
-	mgr := NewManager(configs, 5*time.Minute, mockConnectFunc(mocks))
+	mgr := NewManager(configs, 5*time.Minute, 0, mockConnectFunc(mocks))
 	defer mgr.Close()
 
 	result, err := mgr.CallTool(context.Background(), "serverA", "tool1", json.RawMessage(`{}`))
@@ -248,7 +248,7 @@ func TestListToolsAll_AggregatesFromMultipleServers(t *testing.T) {
 		"serverB": {Command: "b"},
 	}
 
-	mgr := NewManager(configs, 5*time.Minute, mockConnectFunc(mocks))
+	mgr := NewManager(configs, 5*time.Minute, 0, mockConnectFunc(mocks))
 	defer mgr.Close()
 
 	allTools, err := mgr.ListToolsAll(context.Background())
@@ -282,7 +282,7 @@ func TestListToolsAll_HandlesOneServerFailure(t *testing.T) {
 		"serverB": {Command: "b"},
 	}
 
-	mgr := NewManager(configs, 5*time.Minute, mockConnectFunc(mocks))
+	mgr := NewManager(configs, 5*time.Minute, 0, mockConnectFunc(mocks))
 	defer mgr.Close()
 
 	allTools, err := mgr.ListToolsAll(context.Background())
@@ -308,7 +308,7 @@ func TestReaper_ClosesIdleConnections(t *testing.T) {
 	}
 
 	// Use a very short idle timeout so the reaper triggers quickly.
-	mgr := NewManager(configs, 50*time.Millisecond, mockConnectFunc(mocks))
+	mgr := NewManager(configs, 50*time.Millisecond, 0, mockConnectFunc(mocks))
 	defer mgr.Close()
 
 	_, err := mgr.GetUpstream(context.Background(), "server1")
@@ -343,7 +343,7 @@ func TestClose_TearsDownAllConnections(t *testing.T) {
 		"serverB": {Command: "b"},
 	}
 
-	mgr := NewManager(configs, 5*time.Minute, mockConnectFunc(mocks))
+	mgr := NewManager(configs, 5*time.Minute, 0, mockConnectFunc(mocks))
 
 	// Create connections.
 	_, _ = mgr.GetUpstream(context.Background(), "serverA")
@@ -370,9 +370,77 @@ func TestClose_TearsDownAllConnections(t *testing.T) {
 	}
 }
 
+func TestCallTool_RetriesOnStaleConnection(t *testing.T) {
+	callCount := 0
+	stale := &mockUpstream{
+		alive:   true,
+		callErr: fmt.Errorf("connection closed: session not found"),
+	}
+	fresh := &mockUpstream{
+		alive:      true,
+		callResult: json.RawMessage(`{"ok":true}`),
+	}
+
+	factory := func(_ context.Context, name string, _ types.ServerConfig) (Upstream, error) {
+		callCount++
+		if callCount == 1 {
+			return stale, nil
+		}
+		return fresh, nil
+	}
+
+	configs := map[string]types.ServerConfig{
+		"server1": {Command: "echo"},
+	}
+
+	mgr := NewManager(configs, 5*time.Minute, 0, factory)
+	defer mgr.Close()
+
+	result, err := mgr.CallTool(context.Background(), "server1", "mytool", json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("CallTool should have succeeded on retry, got: %v", err)
+	}
+	if string(result) != `{"ok":true}` {
+		t.Fatalf("unexpected result: %s", result)
+	}
+	if callCount != 2 {
+		t.Fatalf("expected factory called twice (initial + reconnect), got %d", callCount)
+	}
+	if !stale.isClosed() {
+		t.Fatal("expected stale connection to be closed")
+	}
+}
+
+func TestCallTool_ReturnsRetryErrorIfBothFail(t *testing.T) {
+	callCount := 0
+	factory := func(_ context.Context, name string, _ types.ServerConfig) (Upstream, error) {
+		callCount++
+		return &mockUpstream{
+			alive:   true,
+			callErr: fmt.Errorf("fail-%d", callCount),
+		}, nil
+	}
+
+	configs := map[string]types.ServerConfig{
+		"server1": {Command: "echo"},
+	}
+
+	mgr := NewManager(configs, 5*time.Minute, 0, factory)
+	defer mgr.Close()
+
+	_, err := mgr.CallTool(context.Background(), "server1", "mytool", json.RawMessage(`{}`))
+	if err == nil {
+		t.Fatal("expected error when both attempts fail")
+	}
+	// Should return the retry error (fail-2), not the original.
+	if err.Error() != "fail-2" {
+		t.Fatalf("expected retry error, got: %v", err)
+	}
+}
+
 func TestListToolsAll_NoServers(t *testing.T) {
 	configs := map[string]types.ServerConfig{}
-	mgr := NewManager(configs, 5*time.Minute, DefaultConnect)
+	mgr := NewManager(configs, 5*time.Minute, 0, DefaultConnect)
 	defer mgr.Close()
 
 	allTools, err := mgr.ListToolsAll(context.Background())

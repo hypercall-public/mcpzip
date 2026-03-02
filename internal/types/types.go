@@ -56,6 +56,7 @@ type ProxyConfig struct {
 	GeminiAPIKey       string                  `json:"gemini_api_key,omitempty"`
 	Search             SearchConfig            `json:"search,omitempty"`
 	IdleTimeoutMinutes int                     `json:"idle_timeout_minutes,omitempty"`
+	CallTimeoutSeconds int                     `json:"call_timeout_seconds,omitempty"`
 	MCPServers         map[string]ServerConfig `json:"mcpServers"`
 }
 

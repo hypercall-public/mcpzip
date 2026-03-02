@@ -16,9 +16,11 @@ An MCP proxy that aggregates multiple upstream MCP servers and exposes them via 
 - Full MCP proxy (tools via search pattern, resources + prompts forwarded directly)
 
 ## Commands
-- `go build ./...` - Build
-- `go test ./...` - Run tests
-- `go run . serve` - Run proxy (stdio mode)
+- `go build -tags mcp_go_client_oauth ./...` - Build (with OAuth support)
+- `go test -tags mcp_go_client_oauth ./...` - Run tests (with OAuth support)
+- `go build ./...` - Build (without OAuth)
+- `go test ./...` - Run tests (without OAuth)
+- `go run -tags mcp_go_client_oauth . serve` - Run proxy (stdio mode, with OAuth)
 - `go run . init` - Interactive setup wizard
 - `go run . migrate` - Auto-migrate from Claude Code config
 
@@ -30,6 +32,7 @@ cmd/
   init.go         - Interactive setup wizard
   migrate.go      - Claude Code config migration
 internal/
+  auth/           - OAuth token persistence and browser-based auth flow
   proxy/          - Core proxy logic, upstream management
   search/         - LLM-powered tool search + semantic cache
   catalog/        - Tool catalog, disk caching, background refresh
