@@ -1,0 +1,10 @@
+pub mod cli;
+pub mod config;
+pub mod error;
+pub mod types;
+pub mod mcp;
+pub mod transport;
+pub mod auth;
+pub mod catalog;
+pub mod search;
+pub mod proxy;
