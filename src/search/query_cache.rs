@@ -10,6 +10,12 @@ pub struct QueryCache {
     store: RwLock<HashMap<String, Vec<SearchResult>>>,
 }
 
+impl Default for QueryCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl QueryCache {
     pub fn new() -> Self {
         Self {

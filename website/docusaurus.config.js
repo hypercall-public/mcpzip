@@ -5,7 +5,7 @@ const { themes: prismThemes } = require("prism-react-renderer");
 const config = {
   title: "mcpzip",
   tagline: "Aggregate hundreds of MCP tools behind 3 meta-tools",
-  favicon: "img/favicon.ico",
+  favicon: "img/logo.svg",
 
   url: "https://hypercall-public.github.io",
   baseUrl: "/mcpzip/",
@@ -43,7 +43,8 @@ const config = {
     ({
       colorMode: {
         defaultMode: "dark",
-        respectPrefersColorScheme: true,
+        disableSwitch: true,
+        respectPrefersColorScheme: false,
       },
       navbar: {
         title: "mcpzip",
@@ -95,11 +96,11 @@ const config = {
             ],
           },
         ],
-        copyright: `Copyright ${new Date().getFullYear()} <a href="https://hypercall.xyz" style="color: #5CF53D;">Hypercall</a>. Built with Docusaurus.`,
+        copyright: `\u00a9 ${new Date().getFullYear()} <a href="https://hypercall.xyz" style="color: #5CF53D;">Hypercall</a>`,
       },
       prism: {
-        theme: prismThemes.github,
-        darkTheme: prismThemes.dracula,
+        theme: prismThemes.oneDark,
+        darkTheme: prismThemes.oneDark,
         additionalLanguages: ["rust", "json", "bash", "toml"],
       },
     }),

@@ -19,6 +19,7 @@ struct PoolEntry {
 pub struct Manager {
     configs: HashMap<String, ServerConfig>,
     pool: Arc<RwLock<HashMap<String, PoolEntry>>>,
+    #[allow(dead_code)]
     idle_timeout: Duration,
     call_timeout: Duration,
     connect: ConnectFn,
@@ -290,7 +291,7 @@ impl Manager {
         }
 
         // Remove stale entry
-        if let Some(mut entry) = pool.remove(server_name) {
+        if let Some(entry) = pool.remove(server_name) {
             let _ = entry.upstream.close().await;
         }
 
@@ -313,7 +314,7 @@ impl Manager {
 
     async fn evict(&self, server_name: &str) {
         let mut pool = self.pool.write().await;
-        if let Some(mut entry) = pool.remove(server_name) {
+        if let Some(entry) = pool.remove(server_name) {
             let _ = entry.upstream.close().await;
         }
     }
@@ -322,7 +323,7 @@ impl Manager {
     pub async fn close(&self) -> Result<(), McpzipError> {
         self.cancel.cancel();
         let mut pool = self.pool.write().await;
-        for (_, mut entry) in pool.drain() {
+        for (_, entry) in pool.drain() {
             let _ = entry.upstream.close().await;
         }
         Ok(())
@@ -339,7 +340,7 @@ async fn reap_idle(pool: &RwLock<HashMap<String, PoolEntry>>, idle_timeout: Dura
         .collect();
 
     for name in stale {
-        if let Some(mut entry) = pool.remove(&name) {
+        if let Some(entry) = pool.remove(&name) {
             let _ = entry.upstream.close().await;
             tracing::debug!(server = %name, "reaped idle connection");
         }

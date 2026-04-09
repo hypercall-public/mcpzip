@@ -50,7 +50,7 @@ fn validate(cfg: &ProxyConfig) -> Result<(), McpzipError> {
     for (name, sc) in &cfg.mcp_servers {
         match sc.effective_type() {
             "stdio" => {
-                if sc.command.as_ref().map_or(true, |c| c.is_empty()) {
+                if sc.command.as_ref().is_none_or(|c| c.is_empty()) {
                     return Err(McpzipError::Config(format!(
                         "server {:?}: stdio server must have a command",
                         name
@@ -58,7 +58,7 @@ fn validate(cfg: &ProxyConfig) -> Result<(), McpzipError> {
                 }
             }
             "http" | "sse" => {
-                if sc.url.as_ref().map_or(true, |u| u.is_empty()) {
+                if sc.url.as_ref().is_none_or(|u| u.is_empty()) {
                     return Err(McpzipError::Config(format!(
                         "server {:?}: {} server must have a url",
                         name,

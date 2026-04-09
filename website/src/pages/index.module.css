@@ -1,8 +1,10 @@
 .heroBanner {
-  padding: 4rem 0;
+  padding: 5rem 0;
   text-align: center;
   position: relative;
   overflow: hidden;
+  background: linear-gradient(180deg, var(--hc-bg) 0%, var(--hc-surface) 100%);
+  border-bottom: 1px solid var(--hc-border);
 }
 
 .buttons {
@@ -10,29 +12,46 @@
   align-items: center;
   justify-content: center;
   gap: 1rem;
-  margin-top: 2rem;
+  margin-top: 2.5rem;
+}
+
+.buttons a {
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .features {
   display: flex;
   align-items: center;
-  padding: 3rem 0;
+  padding: 4rem 0;
 }
 
 .howItWorks {
-  padding: 3rem 0;
-  background: var(--ifm-background-surface-color);
+  padding: 4rem 0;
+  background: var(--hc-surface);
+  border-top: 1px solid var(--hc-border);
+  border-bottom: 1px solid var(--hc-border);
+}
+
+.howItWorks h2 {
+  color: var(--hc-text-strong);
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 .diagram {
-  background: var(--ifm-code-background);
-  border-radius: 8px;
+  background: var(--hc-bg);
+  border: 1px solid var(--hc-border);
+  border-radius: var(--radius-md);
   padding: 1.5rem;
   overflow-x: auto;
+  box-shadow: var(--shadow-sm);
 }
 
 .diagram pre {
   margin: 0;
   font-size: 0.85rem;
   line-height: 1.6;
+  color: var(--hc-text);
 }

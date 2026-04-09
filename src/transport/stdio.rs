@@ -89,12 +89,11 @@ impl Upstream for StdioUpstream {
         // - Single text content that's valid JSON: return the text as raw JSON
         // - Otherwise: return the full result as JSON
         if result.content.len() == 1 {
-            if let ContentItem::Text { ref text } = result.content[0] {
-                if serde_json::from_str::<Value>(text).is_ok() {
-                    return Ok(serde_json::from_str(text)?);
-                }
-                return Ok(Value::String(text.clone()));
+            let ContentItem::Text { ref text } = result.content[0];
+            if serde_json::from_str::<Value>(text).is_ok() {
+                return Ok(serde_json::from_str(text)?);
             }
+            return Ok(Value::String(text.clone()));
         }
         Ok(serde_json::to_value(&result)?)
     }

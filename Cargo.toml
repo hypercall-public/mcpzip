@@ -2,6 +2,14 @@
 name = "mcpzip"
 version = "0.1.0"
 edition = "2021"
+description = "MCP proxy that aggregates multiple servers behind search + execute meta-tools"
+license = "MIT"
+repository = "https://github.com/hypercall-public/mcpzip"
+homepage = "https://hypercall.xyz"
+documentation = "https://hypercall-public.github.io/mcpzip"
+readme = "README.md"
+keywords = ["mcp", "proxy", "ai", "tools", "claude"]
+categories = ["command-line-utilities", "network-programming"]
 
 [lib]
 name = "mcpzip"

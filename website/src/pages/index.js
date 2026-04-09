@@ -58,14 +58,23 @@ function HomepageHeader() {
         <p className="hero__subtitle">{siteConfig.tagline}</p>
         <div className={styles.buttons}>
           <Link
-            className="button button--secondary button--lg"
+            className="button button--lg"
+            style={{
+              background: "#5CF53D",
+              color: "#050507",
+              border: "none",
+              fontWeight: 700,
+            }}
             to="/docs/getting-started"
           >
             Get Started
           </Link>
           <Link
             className="button button--outline button--lg margin-left--md"
-            style={{ color: "white", borderColor: "white" }}
+            style={{
+              color: "rgba(255,255,255,0.85)",
+              borderColor: "rgba(255,255,255,0.12)",
+            }}
             to="https://github.com/hypercall-public/mcpzip"
           >
             GitHub

@@ -1,3 +1,4 @@
+#[allow(unused_imports)]
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};

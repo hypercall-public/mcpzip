@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
+#[allow(unused_imports)]
 use serde_json::{json, Value};
 use tokio::sync::{oneshot, Mutex};
 
@@ -28,28 +29,22 @@ impl McpClient {
         let reader_pending = pending.clone();
 
         let reader_handle = tokio::spawn(async move {
-            loop {
-                match reader_transport.receive().await {
-                    Ok(msg) => {
-                        match JsonRpcMessage::from_value(msg) {
-                            Ok(JsonRpcMessage::Response(resp)) => {
-                                if let Id::Number(id) = &resp.id {
-                                    let mut pending = reader_pending.lock().await;
-                                    if let Some(tx) = pending.remove(id) {
-                                        let _ = tx.send(resp);
-                                    }
-                                }
-                            }
-                            Ok(JsonRpcMessage::Request(_))
-                            | Ok(JsonRpcMessage::Notification(_)) => {
-                                // Server-initiated requests/notifications — ignore for now
-                            }
-                            Err(_) => {
-                                // Malformed message — skip
+            while let Ok(msg) = reader_transport.receive().await {
+                match JsonRpcMessage::from_value(msg) {
+                    Ok(JsonRpcMessage::Response(resp)) => {
+                        if let Id::Number(id) = &resp.id {
+                            let mut pending = reader_pending.lock().await;
+                            if let Some(tx) = pending.remove(id) {
+                                let _ = tx.send(resp);
                             }
                         }
                     }
-                    Err(_) => break, // Transport closed
+                    Ok(JsonRpcMessage::Request(_) | JsonRpcMessage::Notification(_)) => {
+                        // Server-initiated requests/notifications — ignore for now
+                    }
+                    Err(_) => {
+                        // Malformed message — skip
+                    }
                 }
             }
         });

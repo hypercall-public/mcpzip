@@ -365,6 +365,7 @@ impl OAuthHandler {
     }
 
     /// Exchange authorization code for tokens.
+    #[allow(clippy::too_many_arguments)]
     async fn exchange_code(
         &self,
         client: &reqwest::Client,

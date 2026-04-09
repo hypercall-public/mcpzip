@@ -1,8 +1,10 @@
 use std::sync::Arc;
 
+#[allow(unused_imports)]
 use serde_json::Value;
 
 use crate::catalog::Catalog;
+#[allow(unused_imports)]
 use crate::error::McpzipError;
 use crate::mcp::protocol::ToolInfo;
 use crate::search::Searcher;
