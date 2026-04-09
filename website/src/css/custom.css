@@ -1,0 +1,50 @@
+:root {
+  --ifm-color-primary: #6d5ce7;
+  --ifm-color-primary-dark: #5a47e3;
+  --ifm-color-primary-darker: #5040e1;
+  --ifm-color-primary-darkest: #3a29d4;
+  --ifm-color-primary-light: #8071eb;
+  --ifm-color-primary-lighter: #8a7ded;
+  --ifm-color-primary-lightest: #a79af2;
+  --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] {
+  --ifm-color-primary: #a79af2;
+  --ifm-color-primary-dark: #9285ef;
+  --ifm-color-primary-darker: #877ced;
+  --ifm-color-primary-darkest: #6555e7;
+  --ifm-color-primary-light: #bcb0f5;
+  --ifm-color-primary-lighter: #c1b8f6;
+  --ifm-color-primary-lightest: #ddd8fa;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+}
+
+.hero {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+}
+
+[data-theme="light"] .hero {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 50%, #dee2e6 100%);
+}
+
+.hero__title {
+  font-size: 3.5rem;
+  font-weight: 800;
+}
+
+.hero__subtitle {
+  font-size: 1.3rem;
+  opacity: 0.9;
+}
+
+.feature-card {
+  padding: 2rem;
+  border-radius: 12px;
+  transition: transform 0.2s;
+}
+
+.feature-card:hover {
+  transform: translateY(-4px);
+}

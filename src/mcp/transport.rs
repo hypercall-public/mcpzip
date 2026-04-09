@@ -30,10 +30,7 @@ impl NdjsonTransport {
 
     /// Create a transport using stdin/stdout.
     pub fn stdio() -> Self {
-        Self::new(
-            Box::new(tokio::io::stdin()),
-            Box::new(tokio::io::stdout()),
-        )
+        Self::new(Box::new(tokio::io::stdin()), Box::new(tokio::io::stdout()))
     }
 }
 

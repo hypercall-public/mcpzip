@@ -40,7 +40,8 @@ impl McpClient {
                                     }
                                 }
                             }
-                            Ok(JsonRpcMessage::Request(_)) | Ok(JsonRpcMessage::Notification(_)) => {
+                            Ok(JsonRpcMessage::Request(_))
+                            | Ok(JsonRpcMessage::Notification(_)) => {
                                 // Server-initiated requests/notifications — ignore for now
                             }
                             Err(_) => {
@@ -196,12 +197,18 @@ mod tests {
                                 METHOD_NOT_FOUND,
                                 "unknown method".into(),
                             );
-                            transport.send(serde_json::to_value(&resp).unwrap()).await.unwrap();
+                            transport
+                                .send(serde_json::to_value(&resp).unwrap())
+                                .await
+                                .unwrap();
                             continue;
                         }
                     };
                     let resp = make_response(req.id, result);
-                    transport.send(serde_json::to_value(&resp).unwrap()).await.unwrap();
+                    transport
+                        .send(serde_json::to_value(&resp).unwrap())
+                        .await
+                        .unwrap();
                 }
                 JsonRpcMessage::Notification(_) => {
                     // Ignore notifications
@@ -303,10 +310,7 @@ mod tests {
         let client = McpClient::new(ct);
         client.initialize().await.unwrap();
 
-        let err = client
-            .request("unknown/method", None)
-            .await
-            .unwrap_err();
+        let err = client.request("unknown/method", None).await.unwrap_err();
         assert!(err.to_string().contains("unknown method"));
 
         server.abort();

@@ -158,11 +158,17 @@ mod tests {
         }
 
         let catalog_for_search = catalog.clone();
-        let searcher = search::new_searcher("", "", Arc::new(move || catalog_for_search.all_tools()));
+        let searcher =
+            search::new_searcher("", "", Arc::new(move || catalog_for_search.all_tools()));
 
         let connect: ConnectFn = Arc::new(|_name, _cfg| {
             Box::pin(async { Ok(Box::new(MockUpstream) as Box<dyn Upstream>) })
-                as Pin<Box<dyn std::future::Future<Output = Result<Box<dyn Upstream>, McpzipError>> + Send>>
+                as Pin<
+                    Box<
+                        dyn std::future::Future<Output = Result<Box<dyn Upstream>, McpzipError>>
+                            + Send,
+                    >,
+                >
         });
 
         let transport = Arc::new(Manager::new(

@@ -22,11 +22,7 @@ pub trait Upstream: Send + Sync {
     async fn list_tools(&self) -> Result<Vec<ToolEntry>, McpzipError>;
 
     /// Invoke a tool and return the raw JSON result.
-    async fn call_tool(
-        &self,
-        tool_name: &str,
-        args: Value,
-    ) -> Result<Value, McpzipError>;
+    async fn call_tool(&self, tool_name: &str, args: Value) -> Result<Value, McpzipError>;
 
     /// Shut down the connection.
     async fn close(&self) -> Result<(), McpzipError>;

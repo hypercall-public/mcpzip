@@ -16,8 +16,14 @@ impl GeminiSearcher {
     }
 
     /// Stub that returns an error indicating LLM search is not yet implemented.
-    pub async fn search(&self, _query: &str, _limit: usize) -> Result<Vec<SearchResult>, McpzipError> {
-        Err(McpzipError::Transport("LLM search not yet implemented".into()))
+    pub async fn search(
+        &self,
+        _query: &str,
+        _limit: usize,
+    ) -> Result<Vec<SearchResult>, McpzipError> {
+        Err(McpzipError::Transport(
+            "LLM search not yet implemented".into(),
+        ))
     }
 }
 

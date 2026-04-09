@@ -24,10 +24,7 @@ pub struct ServeArgs {
 pub async fn run_serve(args: &ServeArgs) -> Result<(), McpzipError> {
     let cfg = config::load(&args.config)?;
 
-    eprintln!(
-        "mcpzip: starting proxy ({} servers)",
-        cfg.mcp_servers.len()
-    );
+    eprintln!("mcpzip: starting proxy ({} servers)", cfg.mcp_servers.len());
 
     // Resolve Gemini API key: env -> config.
     let api_key = std::env::var("GEMINI_API_KEY")
@@ -38,12 +35,8 @@ pub async fn run_serve(args: &ServeArgs) -> Result<(), McpzipError> {
     // Create transport manager.
     let connect = make_connect_fn();
 
-    let idle_timeout = Duration::from_secs(
-        cfg.idle_timeout_minutes.unwrap_or(5) * 60,
-    );
-    let call_timeout = Duration::from_secs(
-        cfg.call_timeout_seconds.unwrap_or(120),
-    );
+    let idle_timeout = Duration::from_secs(cfg.idle_timeout_minutes.unwrap_or(5) * 60);
+    let call_timeout = Duration::from_secs(cfg.call_timeout_seconds.unwrap_or(120));
     let tm = Arc::new(Manager::new(
         cfg.mcp_servers.clone(),
         idle_timeout,
@@ -71,10 +64,7 @@ pub async fn run_serve(args: &ServeArgs) -> Result<(), McpzipError> {
     // Create proxy server.
     let proxy = Arc::new(ProxyServer::new(catalog.clone(), searcher, tm.clone()));
 
-    eprintln!(
-        "mcpzip: loaded {} tools from cache",
-        catalog.tool_count()
-    );
+    eprintln!("mcpzip: loaded {} tools from cache", catalog.tool_count());
 
     // Background refresh - serve from cache immediately, update as servers connect.
     let refresh_catalog = catalog.clone();
@@ -93,7 +83,10 @@ pub async fn run_serve(args: &ServeArgs) -> Result<(), McpzipError> {
                 }
             }
             Err(e) => {
-                eprintln!("mcpzip: background refresh error (serving from cache): {}", e);
+                eprintln!(
+                    "mcpzip: background refresh error (serving from cache): {}",
+                    e
+                );
             }
         }
     });
@@ -138,25 +131,28 @@ fn make_connect_fn() -> ConnectFn {
         Box::pin(async move {
             match cfg.effective_type() {
                 "stdio" => {
-                    let upstream =
-                        crate::transport::stdio::StdioUpstream::new(name, &cfg).await?;
+                    let upstream = crate::transport::stdio::StdioUpstream::new(name, &cfg).await?;
                     Ok(Box::new(upstream) as Box<dyn Upstream>)
                 }
                 "http" => {
-                    let store = Arc::new(
-                        crate::auth::store::TokenStore::new(crate::config::auth_dir()),
-                    );
-                    let oauth = crate::auth::oauth::OAuthHandler::new(
-                        cfg.url.clone().unwrap_or_default(),
-                        store,
-                    );
+                    // Skip OAuth for servers with custom headers (e.g. API key auth)
+                    let oauth = if cfg.headers.as_ref().is_some_and(|h| !h.is_empty()) {
+                        None
+                    } else {
+                        let store = Arc::new(crate::auth::store::TokenStore::new(
+                            crate::config::auth_dir(),
+                        ));
+                        Some(crate::auth::oauth::OAuthHandler::new(
+                            cfg.url.clone().unwrap_or_default(),
+                            store,
+                        ))
+                    };
                     let upstream =
-                        crate::transport::http::HttpUpstream::new(name, &cfg, Some(oauth)).await?;
+                        crate::transport::http::HttpUpstream::new(name, &cfg, oauth).await?;
                     Ok(Box::new(upstream) as Box<dyn Upstream>)
                 }
                 "sse" => {
-                    let upstream =
-                        crate::transport::sse::SseUpstream::new(name, &cfg).await?;
+                    let upstream = crate::transport::sse::SseUpstream::new(name, &cfg).await?;
                     Ok(Box::new(upstream) as Box<dyn Upstream>)
                 }
                 other => Err(McpzipError::Config(format!(
@@ -164,7 +160,12 @@ fn make_connect_fn() -> ConnectFn {
                     other
                 ))),
             }
-        }) as Pin<Box<dyn std::future::Future<Output = Result<Box<dyn Upstream>, McpzipError>> + Send>>
+        })
+            as Pin<
+                Box<
+                    dyn std::future::Future<Output = Result<Box<dyn Upstream>, McpzipError>> + Send,
+                >,
+            >
     })
 }
 
@@ -189,9 +190,8 @@ fn register_handlers(server: &mut McpServer, proxy: Arc<ProxyServer>) {
         Box::new(move |_method, params| {
             let proxy = proxy.clone();
             Box::pin(async move {
-                let params = params.ok_or_else(|| {
-                    McpzipError::Protocol("tools/call requires params".into())
-                })?;
+                let params = params
+                    .ok_or_else(|| McpzipError::Protocol("tools/call requires params".into()))?;
                 let call: CallToolParams = serde_json::from_value(params)?;
                 let args = call
                     .arguments
@@ -238,10 +238,7 @@ fn register_handlers(server: &mut McpServer, proxy: Arc<ProxyServer>) {
                             is_error: Some(true),
                         })?),
                     },
-                    other => Err(McpzipError::Protocol(format!(
-                        "unknown tool: {:?}",
-                        other
-                    ))),
+                    other => Err(McpzipError::Protocol(format!("unknown tool: {:?}", other))),
                 }
             })
         }),

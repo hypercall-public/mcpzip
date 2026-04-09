@@ -52,7 +52,10 @@ pub fn run_migrate(args: &MigrateArgs) -> Result<(), McpzipError> {
             "   - Remove {} individual server entries",
             claude_cfg.mcp_servers.len()
         );
-        println!("   - Add single \"mcpzip\" entry pointing to {}", mcpzip_bin);
+        println!(
+            "   - Add single \"mcpzip\" entry pointing to {}",
+            mcpzip_bin
+        );
         return Ok(());
     }
 
@@ -116,19 +119,13 @@ fn update_claude_config(
             "args": ["serve"]
         }),
     );
-    raw.insert(
-        "mcpServers".into(),
-        serde_json::Value::Object(new_servers),
-    );
+    raw.insert("mcpServers".into(), serde_json::Value::Object(new_servers));
 
     let out = serde_json::to_string_pretty(&raw)?;
     std::fs::write(claude_path, format!("{}\n", out))?;
 
     println!("\nUpdated {}:", claude_path.display());
-    println!(
-        "  Replaced {} servers with single mcpzip entry",
-        old_count
-    );
+    println!("  Replaced {} servers with single mcpzip entry", old_count);
     Ok(())
 }
 
@@ -150,6 +147,7 @@ mod tests {
                 args: Some(vec!["--token".into(), "abc".into()]),
                 env: None,
                 url: None,
+                headers: None,
             },
         );
         servers.insert(
@@ -160,6 +158,7 @@ mod tests {
                 args: None,
                 env: None,
                 url: None,
+                headers: None,
             },
         );
 
@@ -201,6 +200,7 @@ mod tests {
                 args: None,
                 env: None,
                 url: None,
+                headers: None,
             },
         );
 
@@ -222,6 +222,7 @@ mod tests {
                 args: None,
                 env: None,
                 url: Some("http://localhost:8080/mcp".into()),
+                headers: None,
             },
         );
 
@@ -245,8 +246,7 @@ mod tests {
         update_claude_config(&claude_path, 1, "/usr/local/bin/mcpzip").unwrap();
 
         let data = std::fs::read_to_string(&claude_path).unwrap();
-        let raw: serde_json::Map<String, serde_json::Value> =
-            serde_json::from_str(&data).unwrap();
+        let raw: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&data).unwrap();
         let servers = raw["mcpServers"].as_object().unwrap();
         assert_eq!(servers.len(), 1);
         assert!(servers.contains_key("mcpzip"));

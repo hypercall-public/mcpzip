@@ -1,12 +1,12 @@
-# Compressed MCP Proxy
+# mcpzip
 
 ## Project Overview
 An MCP proxy that aggregates multiple upstream MCP servers and exposes them via a Search + Execute pattern. Instead of loading hundreds of tool schemas into context, Claude uses 3 meta-tools (search_tools, describe_tool, execute_tool) to discover and invoke upstream tools on demand.
 
 ## Tech Stack
-- Go with github.com/modelcontextprotocol/go-sdk (official MCP SDK)
+- Rust (async with tokio)
 - Gemini Flash for LLM-powered tool search (configurable backend)
-- Single binary deployment via goreleaser
+- Single binary deployment
 
 ## Key Architecture
 - Dual client/server proxy: Server (stdio downstream to Claude) + Client (stdio/HTTP upstream to real MCP servers)
@@ -16,28 +16,51 @@ An MCP proxy that aggregates multiple upstream MCP servers and exposes them via 
 - Full MCP proxy (tools via search pattern, resources + prompts forwarded directly)
 
 ## Commands
-- `go build -tags mcp_go_client_oauth ./...` - Build (with OAuth support)
-- `go test -tags mcp_go_client_oauth ./...` - Run tests (with OAuth support)
-- `go build ./...` - Build (without OAuth)
-- `go test ./...` - Run tests (without OAuth)
-- `go run -tags mcp_go_client_oauth . serve` - Run proxy (stdio mode, with OAuth)
-- `go run . init` - Interactive setup wizard
-- `go run . migrate` - Auto-migrate from Claude Code config
+- `cargo build` - Build
+- `cargo test` - Run tests
+- `cargo run -- serve` - Run proxy (stdio mode)
+- `cargo run -- init` - Interactive setup wizard
+- `cargo run -- migrate` - Auto-migrate from Claude Code config
 
 ## Project Structure
 ```
-cmd/
-  root.go         - CLI entry point (cobra)
-  serve.go        - Proxy server command
-  init.go         - Interactive setup wizard
-  migrate.go      - Claude Code config migration
-internal/
-  auth/           - OAuth token persistence and browser-based auth flow
-  proxy/          - Core proxy logic, upstream management
-  search/         - LLM-powered tool search + semantic cache
-  catalog/        - Tool catalog, disk caching, background refresh
-  config/         - Configuration loading
-  transport/      - Upstream connection management (stdio + HTTP)
+src/
+  main.rs          - Entry point
+  lib.rs           - Module declarations
+  config.rs        - Configuration loading
+  error.rs         - Error types
+  types.rs         - Core types (ToolEntry, ServerConfig, ProxyConfig)
+  cli/
+    mod.rs         - CLI definition (clap)
+    serve.rs       - Proxy server command
+    init.rs        - Interactive setup wizard
+    migrate.rs     - Claude Code config migration
+  auth/
+    store.rs       - Token persistence
+    oauth.rs       - OAuth 2.1 browser flow with PKCE
+  proxy/
+    server.rs      - ProxyServer and meta-tool definitions
+    handlers.rs    - search_tools, describe_tool, execute_tool handlers
+    instructions.rs - Dynamic instructions generation
+    resources.rs   - Resource/prompt forwarding
+  catalog/
+    cache.rs       - Disk cache
+    catalog.rs     - Tool catalog with background refresh
+  search/
+    keyword.rs     - Keyword-based search
+    llm.rs         - Gemini-powered semantic search
+    orchestrated.rs - Orchestrated search (keyword + LLM)
+    query_cache.rs - Query result caching
+  transport/
+    manager.rs     - Connection pool with idle timeout
+    stdio.rs       - Stdio upstream transport
+    http.rs        - HTTP/Streamable HTTP transport
+    sse.rs         - SSE transport
+  mcp/
+    protocol.rs    - MCP protocol types
+    server.rs      - MCP server (NDJSON over stdio)
+    client.rs      - MCP client
+    transport.rs   - Transport abstraction
 ```
 
 ## Config Location

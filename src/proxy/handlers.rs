@@ -72,8 +72,9 @@ impl ProxyServer {
 
     /// Handle the describe_tool meta-tool.
     pub fn handle_describe_tool(&self, raw_args: Value) -> Result<String, McpzipError> {
-        let args: DescribeToolArgs = serde_json::from_value(raw_args)
-            .map_err(|e| McpzipError::Protocol(format!("invalid describe_tool arguments: {}", e)))?;
+        let args: DescribeToolArgs = serde_json::from_value(raw_args).map_err(|e| {
+            McpzipError::Protocol(format!("invalid describe_tool arguments: {}", e))
+        })?;
 
         if args.name.is_empty() {
             return Err(McpzipError::Protocol("name is required".into()));
@@ -189,11 +190,7 @@ mod tests {
             Ok(vec![])
         }
 
-        async fn call_tool(
-            &self,
-            tool_name: &str,
-            _args: Value,
-        ) -> Result<Value, McpzipError> {
+        async fn call_tool(&self, tool_name: &str, _args: Value) -> Result<Value, McpzipError> {
             Ok(json!({
                 "server": self.name,
                 "tool": tool_name,
@@ -251,13 +248,18 @@ mod tests {
                 args: None,
                 env: None,
                 url: None,
+                headers: None,
             },
         );
 
         let connect: ConnectFn = Arc::new(|name: String, _cfg: ServerConfig| {
-            Box::pin(async move {
-                Ok(Box::new(MockUpstream { name }) as Box<dyn Upstream>)
-            }) as Pin<Box<dyn std::future::Future<Output = Result<Box<dyn Upstream>, McpzipError>> + Send>>
+            Box::pin(async move { Ok(Box::new(MockUpstream { name }) as Box<dyn Upstream>) })
+                as Pin<
+                    Box<
+                        dyn std::future::Future<Output = Result<Box<dyn Upstream>, McpzipError>>
+                            + Send,
+                    >,
+                >
         });
 
         let transport = Arc::new(Manager::new(

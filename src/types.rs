@@ -35,6 +35,8 @@ pub struct ServerConfig {
     pub env: Option<HashMap<String, String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub headers: Option<HashMap<String, String>>,
 }
 
 impl ServerConfig {
@@ -184,7 +186,10 @@ mod tests {
 
     #[test]
     fn test_prefixed_name() {
-        assert_eq!(prefixed_name("slack", "send_message"), "slack__send_message");
+        assert_eq!(
+            prefixed_name("slack", "send_message"),
+            "slack__send_message"
+        );
     }
 
     #[test]
@@ -214,6 +219,7 @@ mod tests {
             args: None,
             env: None,
             url: None,
+            headers: None,
         };
         assert_eq!(cfg.effective_type(), "stdio");
     }
@@ -226,6 +232,7 @@ mod tests {
             args: None,
             env: None,
             url: Some("https://example.com".into()),
+            headers: None,
         };
         assert_eq!(cfg.effective_type(), "http");
     }
@@ -238,6 +245,7 @@ mod tests {
             args: None,
             env: None,
             url: None,
+            headers: None,
         };
         assert_eq!(cfg.effective_type(), "stdio");
     }
@@ -284,10 +292,7 @@ mod tests {
     fn test_compact_params_empty() {
         assert_eq!(compact_params_from_schema(&json!(null)), "");
         assert_eq!(compact_params_from_schema(&json!({})), "");
-        assert_eq!(
-            compact_params_from_schema(&json!({"properties": {}})),
-            ""
-        );
+        assert_eq!(compact_params_from_schema(&json!({"properties": {}})), "");
     }
 
     #[test]

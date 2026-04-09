@@ -7,9 +7,7 @@ async fn main() {
 
     let result = match &cli.command {
         Commands::Serve(args) => mcpzip::cli::serve::run_serve(args).await,
-        Commands::Init => {
-            mcpzip::cli::init::run_init()
-        }
+        Commands::Init => mcpzip::cli::init::run_init(),
         Commands::Migrate(args) => mcpzip::cli::migrate::run_migrate(args),
     };
 

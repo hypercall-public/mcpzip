@@ -64,9 +64,9 @@ impl JsonRpcMessage {
     /// - id + no method = Response
     /// - method + no id = Notification
     pub fn from_value(v: Value) -> Result<Self, crate::error::McpzipError> {
-        let obj = v
-            .as_object()
-            .ok_or_else(|| crate::error::McpzipError::Protocol("message must be an object".into()))?;
+        let obj = v.as_object().ok_or_else(|| {
+            crate::error::McpzipError::Protocol("message must be an object".into())
+        })?;
 
         let has_id = obj.contains_key("id");
         let has_method = obj.contains_key("method");
@@ -154,7 +154,11 @@ pub struct ToolInfo {
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    #[serde(rename = "inputSchema", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "inputSchema",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub input_schema: Option<Value>,
 }
 

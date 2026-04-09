@@ -32,8 +32,7 @@ impl Manager {
         call_timeout: Duration,
         connect: ConnectFn,
     ) -> Self {
-        let pool: Arc<RwLock<HashMap<String, PoolEntry>>> =
-            Arc::new(RwLock::new(HashMap::new()));
+        let pool: Arc<RwLock<HashMap<String, PoolEntry>>> = Arc::new(RwLock::new(HashMap::new()));
 
         let cancel = tokio_util::sync::CancellationToken::new();
 
@@ -156,9 +155,9 @@ impl Manager {
         // First attempt
         let result = {
             let mut pool = self.pool.write().await;
-            let entry = pool.get_mut(server_name).ok_or_else(|| {
-                McpzipError::Transport("connection disappeared".into())
-            })?;
+            let entry = pool
+                .get_mut(server_name)
+                .ok_or_else(|| McpzipError::Transport("connection disappeared".into()))?;
             entry.last_used = Instant::now();
 
             if self.call_timeout > Duration::ZERO {
@@ -178,23 +177,23 @@ impl Manager {
         }
 
         // Retry: evict and reconnect
-        tracing::warn!(server = server_name, "call failed, retrying with fresh connection");
+        tracing::warn!(
+            server = server_name,
+            "call failed, retrying with fresh connection"
+        );
         self.evict(server_name).await;
         self.ensure_connected(server_name, &cfg).await?;
 
         let mut pool = self.pool.write().await;
-        let entry = pool.get_mut(server_name).ok_or_else(|| {
-            McpzipError::Transport("reconnection failed".into())
-        })?;
+        let entry = pool
+            .get_mut(server_name)
+            .ok_or_else(|| McpzipError::Transport("reconnection failed".into()))?;
         entry.last_used = Instant::now();
 
         if self.call_timeout > Duration::ZERO {
-            tokio::time::timeout(
-                self.call_timeout,
-                entry.upstream.call_tool(tool_name, args),
-            )
-            .await
-            .map_err(|_| McpzipError::Timeout(self.call_timeout.as_secs()))?
+            tokio::time::timeout(self.call_timeout, entry.upstream.call_tool(tool_name, args))
+                .await
+                .map_err(|_| McpzipError::Timeout(self.call_timeout.as_secs()))?
         } else {
             entry.upstream.call_tool(tool_name, args).await
         }
@@ -249,7 +248,11 @@ impl Manager {
                     Ok(Err(e)) => (name, Err(e)),
                     Err(_) => (
                         name.clone(),
-                        Err(McpzipError::Transport(format!("{}: connect timed out ({}s)", name, PER_SERVER_TIMEOUT.as_secs()))),
+                        Err(McpzipError::Transport(format!(
+                            "{}: connect timed out ({}s)",
+                            name,
+                            PER_SERVER_TIMEOUT.as_secs()
+                        ))),
                     ),
                 }
             });
@@ -291,9 +294,11 @@ impl Manager {
             let _ = entry.upstream.close().await;
         }
 
-        let upstream = (self.connect)(server_name.into(), cfg.clone()).await.map_err(|e| {
-            McpzipError::Transport(format!("connecting to {:?}: {}", server_name, e))
-        })?;
+        let upstream = (self.connect)(server_name.into(), cfg.clone())
+            .await
+            .map_err(|e| {
+                McpzipError::Transport(format!("connecting to {:?}: {}", server_name, e))
+            })?;
 
         pool.insert(
             server_name.into(),
@@ -324,10 +329,7 @@ impl Manager {
     }
 }
 
-async fn reap_idle(
-    pool: &RwLock<HashMap<String, PoolEntry>>,
-    idle_timeout: Duration,
-) {
+async fn reap_idle(pool: &RwLock<HashMap<String, PoolEntry>>, idle_timeout: Duration) {
     let mut pool = pool.write().await;
     let now = Instant::now();
     let stale: Vec<String> = pool
@@ -374,11 +376,7 @@ mod tests {
             Ok(self.tools.clone())
         }
 
-        async fn call_tool(
-            &self,
-            tool_name: &str,
-            _args: Value,
-        ) -> Result<Value, McpzipError> {
+        async fn call_tool(&self, tool_name: &str, _args: Value) -> Result<Value, McpzipError> {
             let count = self.call_count.fetch_add(1, Ordering::Relaxed);
             if self.fail_first.load(Ordering::Relaxed) && count == 0 {
                 return Err(McpzipError::Transport("simulated failure".into()));
@@ -399,9 +397,7 @@ mod tests {
     fn mock_connect(tools: Vec<ToolEntry>) -> ConnectFn {
         Arc::new(move |_name, _cfg| {
             let tools = tools.clone();
-            Box::pin(async move {
-                Ok(Box::new(MockUpstream::new(tools)) as Box<dyn Upstream>)
-            })
+            Box::pin(async move { Ok(Box::new(MockUpstream::new(tools)) as Box<dyn Upstream>) })
         })
     }
 
@@ -439,6 +435,7 @@ mod tests {
                 args: None,
                 env: None,
                 url: None,
+                headers: None,
             },
         );
         m
@@ -540,6 +537,7 @@ mod tests {
                 args: None,
                 env: None,
                 url: None,
+                headers: None,
             },
         );
         configs.insert(
@@ -550,6 +548,7 @@ mod tests {
                 args: None,
                 env: None,
                 url: None,
+                headers: None,
             },
         );
 
@@ -600,6 +599,7 @@ mod tests {
                 args: None,
                 env: None,
                 url: None,
+                headers: None,
             },
         );
         configs.insert(
@@ -610,6 +610,7 @@ mod tests {
                 args: None,
                 env: None,
                 url: None,
+                headers: None,
             },
         );
 
@@ -641,8 +642,12 @@ mod tests {
             connect,
         );
 
-        mgr.call_tool("slack", "a", serde_json::json!({})).await.unwrap();
-        mgr.call_tool("slack", "b", serde_json::json!({})).await.unwrap();
+        mgr.call_tool("slack", "a", serde_json::json!({}))
+            .await
+            .unwrap();
+        mgr.call_tool("slack", "b", serde_json::json!({}))
+            .await
+            .unwrap();
 
         // Should only connect once
         assert_eq!(connect_count.load(Ordering::Relaxed), 1);
@@ -659,7 +664,9 @@ mod tests {
             mock_connect(vec![]),
         );
 
-        mgr.call_tool("slack", "x", serde_json::json!({})).await.unwrap();
+        mgr.call_tool("slack", "x", serde_json::json!({}))
+            .await
+            .unwrap();
 
         // Verify pool is non-empty
         {
@@ -688,7 +695,9 @@ mod tests {
             mock_connect(vec![]),
         );
 
-        mgr.call_tool("slack", "x", serde_json::json!({})).await.unwrap();
+        mgr.call_tool("slack", "x", serde_json::json!({}))
+            .await
+            .unwrap();
         mgr.close().await.unwrap();
 
         let pool = mgr.pool.read().await;

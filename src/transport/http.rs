@@ -16,6 +16,7 @@ pub struct HttpUpstream {
     client: reqwest::Client,
     session_id: tokio::sync::Mutex<Option<String>>,
     oauth: Option<OAuthHandler>,
+    custom_headers: Vec<(String, String)>,
     alive: AtomicBool,
     request_id: AtomicU64,
 }
@@ -26,11 +27,18 @@ impl HttpUpstream {
         cfg: &ServerConfig,
         oauth: Option<OAuthHandler>,
     ) -> Result<Self, McpzipError> {
-        let url = cfg.url.as_deref().ok_or_else(|| {
-            McpzipError::Config(format!("server {:?}: missing url", name))
-        })?;
+        let url = cfg
+            .url
+            .as_deref()
+            .ok_or_else(|| McpzipError::Config(format!("server {:?}: missing url", name)))?;
 
         let client = reqwest::Client::new();
+
+        let custom_headers: Vec<(String, String)> = cfg
+            .headers
+            .as_ref()
+            .map(|h| h.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+            .unwrap_or_default();
 
         let upstream = Self {
             name,
@@ -38,6 +46,7 @@ impl HttpUpstream {
             client,
             session_id: tokio::sync::Mutex::new(None),
             oauth,
+            custom_headers,
             alive: AtomicBool::new(true),
             request_id: AtomicU64::new(1),
         };
@@ -76,9 +85,16 @@ impl HttpUpstream {
     }
 
     async fn post_jsonrpc(&self, body: &Value) -> Result<Value, McpzipError> {
-        let mut req = self.client.post(&self.url)
+        let mut req = self
+            .client
+            .post(&self.url)
             .json(body)
             .header("Accept", "application/json, text/event-stream");
+
+        // Add custom headers from config
+        for (k, v) in &self.custom_headers {
+            req = req.header(k, v);
+        }
 
         // Add session ID if we have one
         if let Some(ref sid) = *self.session_id.lock().await {
@@ -97,9 +113,10 @@ impl HttpUpstream {
             }
         }
 
-        let resp = req.send().await.map_err(|e| {
-            McpzipError::Http(format!("POST to {} failed: {}", self.url, e))
-        })?;
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| McpzipError::Http(format!("POST to {} failed: {}", self.url, e)))?;
 
         // Handle 401 - trigger OAuth flow and retry
         if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
@@ -123,7 +140,8 @@ impl HttpUpstream {
         }
 
         // Check Content-Type to decide parsing strategy
-        let content_type = resp.headers()
+        let content_type = resp
+            .headers()
             .get("content-type")
             .and_then(|v| v.to_str().ok())
             .unwrap_or("")
@@ -141,9 +159,10 @@ impl HttpUpstream {
     /// Parse an SSE response, extracting JSON-RPC messages from `data:` lines.
     /// Returns the first JSON-RPC response found (the one matching our request).
     async fn parse_sse_response(&self, resp: reqwest::Response) -> Result<Value, McpzipError> {
-        let text = resp.text().await.map_err(|e| {
-            McpzipError::Http(format!("reading SSE body: {}", e))
-        })?;
+        let text = resp
+            .text()
+            .await
+            .map_err(|e| McpzipError::Http(format!("reading SSE body: {}", e)))?;
 
         // SSE format: lines starting with "data: " contain JSON-RPC messages.
         // Events are separated by blank lines.
@@ -167,13 +186,20 @@ impl HttpUpstream {
             }
         }
 
-        Err(McpzipError::Http("no JSON-RPC response found in SSE stream".into()))
+        Err(McpzipError::Http(
+            "no JSON-RPC response found in SSE stream".into(),
+        ))
     }
 
-    async fn handle_401(&self, body: &Value, resp: &reqwest::Response) -> Result<Value, McpzipError> {
+    async fn handle_401(
+        &self,
+        body: &Value,
+        resp: &reqwest::Response,
+    ) -> Result<Value, McpzipError> {
         if let Some(ref oauth) = self.oauth {
             // Extract resource_metadata from WWW-Authenticate header if present
-            let www_auth = resp.headers()
+            let www_auth = resp
+                .headers()
                 .get("www-authenticate")
                 .and_then(|v| v.to_str().ok())
                 .unwrap_or("");
@@ -183,17 +209,24 @@ impl HttpUpstream {
 
             // Retry with the new token
             let header = oauth.authorization_header().await?;
-            let mut retry_req = self.client
+            let mut retry_req = self
+                .client
                 .post(&self.url)
                 .json(body)
                 .header("Accept", "application/json, text/event-stream")
                 .header("Authorization", header);
 
+            for (k, v) in &self.custom_headers {
+                retry_req = retry_req.header(k, v);
+            }
+
             if let Some(ref sid) = *self.session_id.lock().await {
                 retry_req = retry_req.header("Mcp-Session-Id", sid);
             }
 
-            let retry_resp = retry_req.send().await
+            let retry_resp = retry_req
+                .send()
+                .await
                 .map_err(|e| McpzipError::Http(e.to_string()))?;
 
             if retry_resp.status() == reqwest::StatusCode::ACCEPTED {
@@ -214,7 +247,8 @@ impl HttpUpstream {
                 }
             }
 
-            let content_type = retry_resp.headers()
+            let content_type = retry_resp
+                .headers()
                 .get("content-type")
                 .and_then(|v| v.to_str().ok())
                 .unwrap_or("")
@@ -224,10 +258,14 @@ impl HttpUpstream {
                 return self.parse_sse_response(retry_resp).await;
             }
 
-            return retry_resp.json().await
+            return retry_resp
+                .json()
+                .await
                 .map_err(|e| McpzipError::Http(e.to_string()));
         }
-        Err(McpzipError::Auth("server returned 401, no OAuth handler".into()))
+        Err(McpzipError::Auth(
+            "server returned 401, no OAuth handler".into(),
+        ))
     }
 }
 
@@ -264,11 +302,7 @@ impl Upstream for HttpUpstream {
             .collect())
     }
 
-    async fn call_tool(
-        &self,
-        tool_name: &str,
-        args: Value,
-    ) -> Result<Value, McpzipError> {
+    async fn call_tool(&self, tool_name: &str, args: Value) -> Result<Value, McpzipError> {
         use crate::mcp::protocol::*;
 
         let req = make_request(
@@ -301,7 +335,9 @@ impl Upstream for HttpUpstream {
             return Err(McpzipError::Protocol(format!("RPC error: {}", error)));
         }
 
-        Err(McpzipError::Protocol("no result or error in response".into()))
+        Err(McpzipError::Protocol(
+            "no result or error in response".into(),
+        ))
     }
 
     async fn close(&self) -> Result<(), McpzipError> {

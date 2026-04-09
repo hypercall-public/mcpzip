@@ -85,10 +85,7 @@ impl TokenStore {
                     .recursive(true)
                     .create(&self.base_dir)?;
                 use std::os::unix::fs::PermissionsExt;
-                std::fs::set_permissions(
-                    &self.base_dir,
-                    std::fs::Permissions::from_mode(0o700),
-                )?;
+                std::fs::set_permissions(&self.base_dir, std::fs::Permissions::from_mode(0o700))?;
             }
             #[cfg(not(unix))]
             {

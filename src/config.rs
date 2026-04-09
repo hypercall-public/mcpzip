@@ -203,11 +203,7 @@ mod tests {
     fn test_validate_http_no_url() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("config.json");
-        std::fs::write(
-            &path,
-            r#"{"mcpServers": {"x": {"type": "http"}}}"#,
-        )
-        .unwrap();
+        std::fs::write(&path, r#"{"mcpServers": {"x": {"type": "http"}}}"#).unwrap();
 
         let err = load(&path).unwrap_err();
         assert!(err.to_string().contains("must have a url"));

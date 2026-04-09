@@ -10,7 +10,10 @@ use crate::mcp::transport::McpTransport;
 
 /// Type for async handler functions.
 pub type Handler = Box<
-    dyn Fn(String, Option<Value>) -> Pin<Box<dyn Future<Output = Result<Value, McpzipError>> + Send>>
+    dyn Fn(
+            String,
+            Option<Value>,
+        ) -> Pin<Box<dyn Future<Output = Result<Value, McpzipError>> + Send>>
         + Send
         + Sync,
 >;
@@ -47,7 +50,10 @@ impl McpServer {
     }
 
     /// Run the server loop: read requests from transport, dispatch, send responses.
-    pub async fn run(&self, cancel: tokio_util::sync::CancellationToken) -> Result<(), McpzipError> {
+    pub async fn run(
+        &self,
+        cancel: tokio_util::sync::CancellationToken,
+    ) -> Result<(), McpzipError> {
         loop {
             tokio::select! {
                 _ = cancel.cancelled() => {
@@ -122,9 +128,7 @@ mod tests {
     use serde_json::json;
 
     fn test_handler() -> Handler {
-        Box::new(|_method, _params| {
-            Box::pin(async { Ok(json!({"tools": []})) })
-        })
+        Box::new(|_method, _params| Box::pin(async { Ok(json!({"tools": []})) }))
     }
 
     #[tokio::test]
@@ -143,13 +147,19 @@ mod tests {
 
         // Send initialize
         let init_req = make_request(1, "initialize", Some(json!({})));
-        client_t.send(serde_json::to_value(&init_req).unwrap()).await.unwrap();
+        client_t
+            .send(serde_json::to_value(&init_req).unwrap())
+            .await
+            .unwrap();
         let resp = client_t.receive().await.unwrap();
         assert!(resp.get("result").is_some());
 
         // Send tools/list
         let list_req = make_request(2, "tools/list", None);
-        client_t.send(serde_json::to_value(&list_req).unwrap()).await.unwrap();
+        client_t
+            .send(serde_json::to_value(&list_req).unwrap())
+            .await
+            .unwrap();
         let resp = client_t.receive().await.unwrap();
         assert!(resp["result"]["tools"].is_array());
 
@@ -170,7 +180,10 @@ mod tests {
         let srv_handle = tokio::spawn(async move { server.run(cancel2).await });
 
         let req = make_request(1, "unknown/method", None);
-        client_t.send(serde_json::to_value(&req).unwrap()).await.unwrap();
+        client_t
+            .send(serde_json::to_value(&req).unwrap())
+            .await
+            .unwrap();
         let resp = client_t.receive().await.unwrap();
         assert!(resp.get("error").is_some());
         assert_eq!(resp["error"]["code"], METHOD_NOT_FOUND);
@@ -199,7 +212,10 @@ mod tests {
         let srv_handle = tokio::spawn(async move { server.run(cancel2).await });
 
         let req = make_request(1, "initialize", Some(json!({})));
-        client_t.send(serde_json::to_value(&req).unwrap()).await.unwrap();
+        client_t
+            .send(serde_json::to_value(&req).unwrap())
+            .await
+            .unwrap();
         let resp = client_t.receive().await.unwrap();
 
         let result = &resp["result"];
@@ -226,11 +242,17 @@ mod tests {
 
         // Send notification — should not get a response
         let notif = make_notification("notifications/initialized", None);
-        client_t.send(serde_json::to_value(&notif).unwrap()).await.unwrap();
+        client_t
+            .send(serde_json::to_value(&notif).unwrap())
+            .await
+            .unwrap();
 
         // Send a request to verify server is still alive
         let req = make_request(1, "initialize", Some(json!({})));
-        client_t.send(serde_json::to_value(&req).unwrap()).await.unwrap();
+        client_t
+            .send(serde_json::to_value(&req).unwrap())
+            .await
+            .unwrap();
         let resp = client_t.receive().await.unwrap();
         assert!(resp.get("result").is_some());
 

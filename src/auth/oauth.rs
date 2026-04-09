@@ -52,7 +52,11 @@ impl OAuthHandler {
     }
 
     /// Get a token, with optional hints from WWW-Authenticate header.
-    pub async fn get_token_with_hint(&self, www_authenticate: &str, resource_url: &str) -> Result<Token, McpzipError> {
+    pub async fn get_token_with_hint(
+        &self,
+        www_authenticate: &str,
+        resource_url: &str,
+    ) -> Result<Token, McpzipError> {
         // Try cached token first
         if let Some(tok) = self.store.load(&self.server_url)? {
             if !tok.access_token.is_empty() {
@@ -68,7 +72,11 @@ impl OAuthHandler {
         }
 
         // Full OAuth browser flow
-        let resource = if resource_url.is_empty() { &self.server_url } else { resource_url };
+        let resource = if resource_url.is_empty() {
+            &self.server_url
+        } else {
+            resource_url
+        };
         self.browser_auth_flow(www_authenticate, resource).await
     }
 
@@ -86,7 +94,8 @@ impl OAuthHandler {
             let dir = entry.path();
 
             // Look for token files and try each one against our server
-            let token_files: Vec<_> = std::fs::read_dir(&dir).ok()?
+            let token_files: Vec<_> = std::fs::read_dir(&dir)
+                .ok()?
                 .flatten()
                 .filter(|e| e.file_name().to_string_lossy().ends_with("_tokens.json"))
                 .collect();
@@ -94,10 +103,12 @@ impl OAuthHandler {
             for tf in token_files {
                 let data = std::fs::read_to_string(tf.path()).ok()?;
                 if let Ok(tokens) = serde_json::from_str::<serde_json::Value>(&data) {
-                    if let Some(access_token) = tokens.get("access_token").and_then(|v| v.as_str()) {
+                    if let Some(access_token) = tokens.get("access_token").and_then(|v| v.as_str())
+                    {
                         // Quick validation: try using this token
                         let client = reqwest::Client::new();
-                        let resp = client.post(&self.server_url)
+                        let resp = client
+                            .post(&self.server_url)
                             .header("Accept", "application/json, text/event-stream")
                             .header("Authorization", format!("Bearer {}", access_token))
                             .header("Content-Type", "application/json")
@@ -106,11 +117,19 @@ impl OAuthHandler {
                             .await
                             .ok()?;
 
-                        if resp.status().is_success() || resp.status() == reqwest::StatusCode::ACCEPTED {
+                        if resp.status().is_success()
+                            || resp.status() == reqwest::StatusCode::ACCEPTED
+                        {
                             return Some(Token {
                                 access_token: access_token.into(),
-                                token_type: tokens.get("token_type").and_then(|v| v.as_str()).map(|s| s.into()),
-                                refresh_token: tokens.get("refresh_token").and_then(|v| v.as_str()).map(|s| s.into()),
+                                token_type: tokens
+                                    .get("token_type")
+                                    .and_then(|v| v.as_str())
+                                    .map(|s| s.into()),
+                                refresh_token: tokens
+                                    .get("refresh_token")
+                                    .and_then(|v| v.as_str())
+                                    .map(|s| s.into()),
                                 expiry: None,
                             });
                         }
@@ -122,19 +141,27 @@ impl OAuthHandler {
     }
 
     /// Full OAuth 2.1 browser flow with PKCE.
-    async fn browser_auth_flow(&self, www_authenticate: &str, resource: &str) -> Result<Token, McpzipError> {
+    async fn browser_auth_flow(
+        &self,
+        www_authenticate: &str,
+        resource: &str,
+    ) -> Result<Token, McpzipError> {
         let client = reqwest::Client::new();
 
         // Step 1: Discover authorization server
         let auth_server_url = self.discover_auth_server(&client, www_authenticate).await?;
 
         // Step 2: Get authorization server metadata
-        let metadata = self.get_auth_server_metadata(&client, &auth_server_url).await?;
+        let metadata = self
+            .get_auth_server_metadata(&client, &auth_server_url)
+            .await?;
 
         // Verify PKCE support
         if let Some(ref methods) = metadata.code_challenge_methods_supported {
             if !methods.iter().any(|m| m == "S256") {
-                return Err(McpzipError::Auth("authorization server does not support S256 PKCE".into()));
+                return Err(McpzipError::Auth(
+                    "authorization server does not support S256 PKCE".into(),
+                ));
             }
         }
 
@@ -146,9 +173,11 @@ impl OAuthHandler {
         let code_challenge = generate_code_challenge(&code_verifier);
 
         // Step 5: Start local callback server
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
             .map_err(|e| McpzipError::Auth(format!("binding callback server: {}", e)))?;
-        let port = listener.local_addr()
+        let port = listener
+            .local_addr()
             .map_err(|e| McpzipError::Auth(format!("getting port: {}", e)))?
             .port();
         let redirect_uri = format!("http://127.0.0.1:{}/oauth/callback", port);
@@ -177,15 +206,17 @@ impl OAuthHandler {
         }
 
         // Step 8: Exchange code for token
-        let token = self.exchange_code(
-            &client,
-            &metadata.token_endpoint,
-            &code,
-            &code_verifier,
-            &redirect_uri,
-            &client_info.client_id,
-            resource,
-        ).await?;
+        let token = self
+            .exchange_code(
+                &client,
+                &metadata.token_endpoint,
+                &code,
+                &code_verifier,
+                &redirect_uri,
+                &client_info.client_id,
+                resource,
+            )
+            .await?;
 
         // Step 9: Persist token
         self.store.save(&self.server_url, &token)?;
@@ -194,7 +225,11 @@ impl OAuthHandler {
     }
 
     /// Discover the authorization server URL from protected resource metadata or WWW-Authenticate.
-    async fn discover_auth_server(&self, client: &reqwest::Client, www_authenticate: &str) -> Result<String, McpzipError> {
+    async fn discover_auth_server(
+        &self,
+        client: &reqwest::Client,
+        www_authenticate: &str,
+    ) -> Result<String, McpzipError> {
         // Try to extract resource_metadata from WWW-Authenticate header
         if let Some(metadata_url) = extract_resource_metadata(www_authenticate) {
             if let Ok(prm) = client.get(&metadata_url).send().await {
@@ -246,7 +281,11 @@ impl OAuthHandler {
     }
 
     /// Fetch authorization server metadata.
-    async fn get_auth_server_metadata(&self, client: &reqwest::Client, auth_server: &str) -> Result<AuthServerMetadata, McpzipError> {
+    async fn get_auth_server_metadata(
+        &self,
+        client: &reqwest::Client,
+        auth_server: &str,
+    ) -> Result<AuthServerMetadata, McpzipError> {
         let url = url::Url::parse(auth_server)
             .map_err(|e| McpzipError::Auth(format!("invalid auth server URL: {}", e)))?;
 
@@ -284,9 +323,14 @@ impl OAuthHandler {
     }
 
     /// Register as a dynamic client (RFC 7591).
-    async fn register_client(&self, client: &reqwest::Client, metadata: &AuthServerMetadata) -> Result<ClientInfo, McpzipError> {
-        let reg_endpoint = metadata.registration_endpoint.as_ref()
-            .ok_or_else(|| McpzipError::Auth("no registration_endpoint in auth server metadata".into()))?;
+    async fn register_client(
+        &self,
+        client: &reqwest::Client,
+        metadata: &AuthServerMetadata,
+    ) -> Result<ClientInfo, McpzipError> {
+        let reg_endpoint = metadata.registration_endpoint.as_ref().ok_or_else(|| {
+            McpzipError::Auth("no registration_endpoint in auth server metadata".into())
+        })?;
 
         let reg_req = serde_json::json!({
             "client_name": "mcpzip",
@@ -296,7 +340,8 @@ impl OAuthHandler {
             "response_types": ["code"]
         });
 
-        let resp = client.post(reg_endpoint)
+        let resp = client
+            .post(reg_endpoint)
             .json(&reg_req)
             .send()
             .await
@@ -311,7 +356,9 @@ impl OAuthHandler {
             )));
         }
 
-        let info: ClientInfo = resp.json().await
+        let info: ClientInfo = resp
+            .json()
+            .await
             .map_err(|e| McpzipError::Auth(format!("parsing registration response: {}", e)))?;
 
         Ok(info)
@@ -337,7 +384,8 @@ impl OAuthHandler {
             ("resource", resource),
         ];
 
-        let resp = client.post(token_endpoint)
+        let resp = client
+            .post(token_endpoint)
             .form(&params)
             .send()
             .await
@@ -352,16 +400,25 @@ impl OAuthHandler {
             )));
         }
 
-        let token_resp: serde_json::Value = resp.json().await
+        let token_resp: serde_json::Value = resp
+            .json()
+            .await
             .map_err(|e| McpzipError::Auth(format!("parsing token response: {}", e)))?;
 
         Ok(Token {
-            access_token: token_resp.get("access_token")
+            access_token: token_resp
+                .get("access_token")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| McpzipError::Auth("no access_token in response".into()))?
                 .into(),
-            token_type: token_resp.get("token_type").and_then(|v| v.as_str()).map(|s| s.into()),
-            refresh_token: token_resp.get("refresh_token").and_then(|v| v.as_str()).map(|s| s.into()),
+            token_type: token_resp
+                .get("token_type")
+                .and_then(|v| v.as_str())
+                .map(|s| s.into()),
+            refresh_token: token_resp
+                .get("refresh_token")
+                .and_then(|v| v.as_str())
+                .map(|s| s.into()),
             expiry: None,
         })
     }
@@ -371,7 +428,11 @@ impl OAuthHandler {
         let tok = self.get_token().await?;
         let token_type = tok.token_type.as_deref().unwrap_or("Bearer");
         // Capitalize first letter for consistency
-        let token_type = if token_type.eq_ignore_ascii_case("bearer") { "Bearer" } else { token_type };
+        let token_type = if token_type.eq_ignore_ascii_case("bearer") {
+            "Bearer"
+        } else {
+            token_type
+        };
         Ok(format!("{} {}", token_type, tok.access_token))
     }
 }
@@ -410,25 +471,32 @@ fn extract_resource_metadata(header: &str) -> Option<String> {
 
 /// Wait for the OAuth callback on the local server.
 /// Returns (code, state).
-async fn wait_for_callback(listener: tokio::net::TcpListener) -> Result<(String, String), McpzipError> {
+async fn wait_for_callback(
+    listener: tokio::net::TcpListener,
+) -> Result<(String, String), McpzipError> {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-    let (mut stream, _) = tokio::time::timeout(
-        std::time::Duration::from_secs(120),
-        listener.accept(),
-    )
-    .await
-    .map_err(|_| McpzipError::Auth("OAuth callback timed out (120s)".into()))?
-    .map_err(|e| McpzipError::Auth(format!("accepting callback: {}", e)))?;
+    let (mut stream, _) =
+        tokio::time::timeout(std::time::Duration::from_secs(120), listener.accept())
+            .await
+            .map_err(|_| McpzipError::Auth("OAuth callback timed out (120s)".into()))?
+            .map_err(|e| McpzipError::Auth(format!("accepting callback: {}", e)))?;
 
     let mut buf = vec![0u8; 4096];
-    let n = stream.read(&mut buf).await
+    let n = stream
+        .read(&mut buf)
+        .await
         .map_err(|e| McpzipError::Auth(format!("reading callback: {}", e)))?;
     let request = String::from_utf8_lossy(&buf[..n]);
 
     // Parse the GET request for code and state params
-    let path = request.lines().next().unwrap_or("")
-        .split_whitespace().nth(1).unwrap_or("");
+    let path = request
+        .lines()
+        .next()
+        .unwrap_or("")
+        .split_whitespace()
+        .nth(1)
+        .unwrap_or("");
 
     let query = path.split('?').nth(1).unwrap_or("");
     let mut code = String::new();
@@ -455,10 +523,14 @@ async fn wait_for_callback(listener: tokio::net::TcpListener) -> Result<(String,
 
     if code.is_empty() {
         // Check for error
-        let error = query.split('&')
+        let error = query
+            .split('&')
             .find_map(|p| p.strip_prefix("error="))
             .unwrap_or("unknown");
-        return Err(McpzipError::Auth(format!("OAuth callback error: {}", error)));
+        return Err(McpzipError::Auth(format!(
+            "OAuth callback error: {}",
+            error
+        )));
     }
 
     Ok((code, state))

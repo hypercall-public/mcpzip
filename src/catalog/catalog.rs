@@ -45,7 +45,10 @@ impl Catalog {
     /// Refresh from upstream servers. Takes a map of server_name -> tools.
     /// Merges with existing catalog: only replaces tools for servers that
     /// returned results, keeps cached tools for servers not in the map.
-    pub fn refresh(&self, server_tools: HashMap<String, Vec<ToolEntry>>) -> Result<(), McpzipError> {
+    pub fn refresh(
+        &self,
+        server_tools: HashMap<String, Vec<ToolEntry>>,
+    ) -> Result<(), McpzipError> {
         let mut all: Vec<ToolEntry> = Vec::new();
 
         {

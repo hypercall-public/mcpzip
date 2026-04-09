@@ -29,14 +29,16 @@ impl KeywordSearcher {
             .into_iter()
             .filter_map(|entry| {
                 let s = score_entry(&entry, &tokens);
-                if s > 0 { Some((entry, s)) } else { None }
+                if s > 0 {
+                    Some((entry, s))
+                } else {
+                    None
+                }
             })
             .collect();
 
         // Sort by score descending, then by name ascending for determinism.
-        scored.sort_by(|a, b| {
-            b.1.cmp(&a.1).then_with(|| a.0.name.cmp(&b.0.name))
-        });
+        scored.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.name.cmp(&b.0.name)));
 
         if limit > 0 && scored.len() > limit {
             scored.truncate(limit);

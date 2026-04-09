@@ -10,9 +10,7 @@ use crate::mcp::client::McpClient;
 use crate::mcp::protocol::{ContentItem, ToolInfo};
 use crate::mcp::transport::NdjsonTransport;
 use crate::transport::Upstream;
-use crate::types::{
-    compact_params_from_schema, prefixed_name, ServerConfig, ToolEntry,
-};
+use crate::types::{compact_params_from_schema, prefixed_name, ServerConfig, ToolEntry};
 
 /// Upstream connection via a stdio subprocess.
 pub struct StdioUpstream {
@@ -25,9 +23,10 @@ pub struct StdioUpstream {
 impl StdioUpstream {
     /// Spawn a subprocess and perform MCP handshake.
     pub async fn new(name: String, cfg: &ServerConfig) -> Result<Self, McpzipError> {
-        let command = cfg.command.as_deref().ok_or_else(|| {
-            McpzipError::Config(format!("server {:?}: missing command", name))
-        })?;
+        let command = cfg
+            .command
+            .as_deref()
+            .ok_or_else(|| McpzipError::Config(format!("server {:?}: missing command", name)))?;
 
         let mut cmd = Command::new(command);
         if let Some(args) = &cfg.args {
@@ -43,21 +42,20 @@ impl StdioUpstream {
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::inherit());
 
-        let mut child = cmd.spawn().map_err(|e| {
-            McpzipError::Transport(format!("failed to spawn {:?}: {}", command, e))
-        })?;
+        let mut child = cmd
+            .spawn()
+            .map_err(|e| McpzipError::Transport(format!("failed to spawn {:?}: {}", command, e)))?;
 
-        let stdin = child.stdin.take().ok_or_else(|| {
-            McpzipError::Transport("failed to capture stdin".into())
-        })?;
-        let stdout = child.stdout.take().ok_or_else(|| {
-            McpzipError::Transport("failed to capture stdout".into())
-        })?;
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| McpzipError::Transport("failed to capture stdin".into()))?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| McpzipError::Transport("failed to capture stdout".into()))?;
 
-        let transport = Arc::new(NdjsonTransport::new(
-            Box::new(stdout),
-            Box::new(stdin),
-        ));
+        let transport = Arc::new(NdjsonTransport::new(Box::new(stdout), Box::new(stdin)));
         let client = McpClient::new(transport);
 
         // Perform MCP handshake
@@ -84,11 +82,7 @@ impl Upstream for StdioUpstream {
             .collect())
     }
 
-    async fn call_tool(
-        &self,
-        tool_name: &str,
-        args: Value,
-    ) -> Result<Value, McpzipError> {
+    async fn call_tool(&self, tool_name: &str, args: Value) -> Result<Value, McpzipError> {
         let result = self.client.call_tool(tool_name, args).await?;
 
         // Convert CallToolResult to raw JSON value, matching Go behavior:

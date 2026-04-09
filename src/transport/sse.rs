@@ -17,9 +17,10 @@ pub struct SseUpstream {
 
 impl SseUpstream {
     pub async fn new(name: String, cfg: &ServerConfig) -> Result<Self, McpzipError> {
-        let url = cfg.url.as_deref().ok_or_else(|| {
-            McpzipError::Config(format!("server {:?}: missing url", name))
-        })?;
+        let url = cfg
+            .url
+            .as_deref()
+            .ok_or_else(|| McpzipError::Config(format!("server {:?}: missing url", name)))?;
 
         // TODO: Full SSE implementation
         // 1. Connect to URL via GET, receive SSE stream
@@ -44,11 +45,7 @@ impl Upstream for SseUpstream {
         )))
     }
 
-    async fn call_tool(
-        &self,
-        _tool_name: &str,
-        _args: Value,
-    ) -> Result<Value, McpzipError> {
+    async fn call_tool(&self, _tool_name: &str, _args: Value) -> Result<Value, McpzipError> {
         Err(McpzipError::Transport(format!(
             "SSE transport not yet implemented for {:?}",
             self.name
