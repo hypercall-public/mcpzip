@@ -207,4 +207,127 @@ mod tests {
         assert_eq!(defs[1].name, "describe_tool");
         assert_eq!(defs[2].name, "execute_tool");
     }
+
+    // --- New tests ---
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_instructions_with_multiple_servers() {
+        let dir = tempfile::tempdir().unwrap();
+        let catalog = Arc::new(Catalog::new(dir.path().join("tools.json")));
+
+        let mut server_tools = HashMap::new();
+        server_tools.insert(
+            "slack".into(),
+            vec![
+                ToolEntry {
+                    name: "slack__send".into(),
+                    server_name: "slack".into(),
+                    original_name: "send".into(),
+                    description: "Send message".into(),
+                    input_schema: json!(null),
+                    compact_params: "".into(),
+                },
+                ToolEntry {
+                    name: "slack__read".into(),
+                    server_name: "slack".into(),
+                    original_name: "read".into(),
+                    description: "Read messages".into(),
+                    input_schema: json!(null),
+                    compact_params: "".into(),
+                },
+            ],
+        );
+        server_tools.insert(
+            "github".into(),
+            vec![ToolEntry {
+                name: "github__pr".into(),
+                server_name: "github".into(),
+                original_name: "pr".into(),
+                description: "Create PR".into(),
+                input_schema: json!(null),
+                compact_params: "".into(),
+            }],
+        );
+        catalog.refresh(server_tools).unwrap();
+
+        let catalog_for_search = catalog.clone();
+        let searcher =
+            search::new_searcher("", "", Arc::new(move || catalog_for_search.all_tools()));
+
+        let connect: ConnectFn = Arc::new(|_name, _cfg| {
+            Box::pin(async { Ok(Box::new(MockUpstream) as Box<dyn Upstream>) })
+                as Pin<
+                    Box<
+                        dyn std::future::Future<Output = Result<Box<dyn Upstream>, McpzipError>>
+                            + Send,
+                    >,
+                >
+        });
+
+        let transport = Arc::new(Manager::new(
+            HashMap::new(),
+            Duration::from_secs(300),
+            Duration::from_secs(120),
+            connect,
+        ));
+
+        let proxy = ProxyServer::new(catalog, searcher, transport);
+        let instructions = proxy.instructions();
+
+        assert!(instructions.contains("slack"));
+        assert!(instructions.contains("github"));
+        assert!(instructions.contains("2 tools"));
+        assert!(instructions.contains("1 tools"));
+        assert!(instructions.contains("search_tools"));
+        assert!(instructions.contains("describe_tool"));
+        assert!(instructions.contains("execute_tool"));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_tool_definitions_have_schemas() {
+        let proxy = make_proxy(false);
+        let defs = proxy.tool_definitions();
+
+        for def in &defs {
+            assert!(
+                def.input_schema.is_some(),
+                "{} should have input_schema",
+                def.name
+            );
+            let schema = def.input_schema.as_ref().unwrap();
+            assert_eq!(
+                schema["type"], "object",
+                "{} schema type should be object",
+                def.name
+            );
+            assert!(
+                schema.get("properties").is_some(),
+                "{} schema should have properties",
+                def.name
+            );
+            assert!(
+                schema.get("required").is_some(),
+                "{} schema should have required",
+                def.name
+            );
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_instructions_empty_server_names() {
+        let proxy = make_proxy(false);
+        let instructions = proxy.instructions();
+        // When no servers have tools, should use simple message
+        assert!(instructions.contains("search_tools"));
+        assert!(!instructions.contains("aggregates"));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_instruction_format() {
+        let proxy = make_proxy(true);
+        let instructions = proxy.instructions();
+        // Should include the server listing format
+        assert!(instructions.contains("mcpzip proxy aggregates tools"));
+        assert!(instructions.contains("- slack"));
+    }
 }

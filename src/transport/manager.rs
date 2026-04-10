@@ -710,4 +710,137 @@ mod tests {
         fn assert_send_sync<T: Send + Sync>() {}
         assert_send_sync::<Manager>();
     }
+
+    // --- New tests ---
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_empty_configs_list_tools_all() {
+        let mgr = Manager::new(
+            HashMap::new(),
+            Duration::from_secs(300),
+            Duration::ZERO,
+            mock_connect(vec![]),
+        );
+
+        let result = mgr.list_tools_all().await.unwrap();
+        assert!(result.is_empty());
+
+        mgr.close().await.unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_call_across_servers() {
+        let mut configs = HashMap::new();
+        configs.insert(
+            "server_a".into(),
+            ServerConfig {
+                server_type: None,
+                command: Some("a".into()),
+                args: None,
+                env: None,
+                url: None,
+                headers: None,
+            },
+        );
+        configs.insert(
+            "server_b".into(),
+            ServerConfig {
+                server_type: None,
+                command: Some("b".into()),
+                args: None,
+                env: None,
+                url: None,
+                headers: None,
+            },
+        );
+
+        let mgr = Manager::new(
+            configs,
+            Duration::from_secs(300),
+            Duration::ZERO,
+            mock_connect(test_tools()),
+        );
+
+        let result_a = mgr
+            .call_tool("server_a", "tool1", serde_json::json!({}))
+            .await
+            .unwrap();
+        assert!(result_a["result"].as_str().unwrap().contains("tool1"));
+
+        let result_b = mgr
+            .call_tool("server_b", "tool2", serde_json::json!({}))
+            .await
+            .unwrap();
+        assert!(result_b["result"].as_str().unwrap().contains("tool2"));
+
+        mgr.close().await.unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_close_idempotency() {
+        let mgr = Manager::new(
+            test_configs(),
+            Duration::from_secs(300),
+            Duration::ZERO,
+            mock_connect(vec![]),
+        );
+
+        mgr.call_tool("slack", "x", serde_json::json!({}))
+            .await
+            .unwrap();
+
+        // Close multiple times should not panic
+        mgr.close().await.unwrap();
+        mgr.close().await.unwrap();
+        mgr.close().await.unwrap();
+
+        let pool = mgr.pool.read().await;
+        assert!(pool.is_empty());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_concurrent_calls() {
+        let mgr = Arc::new(Manager::new(
+            test_configs(),
+            Duration::from_secs(300),
+            Duration::ZERO,
+            mock_connect(test_tools()),
+        ));
+
+        let mut handles = Vec::new();
+        for i in 0..10 {
+            let m = mgr.clone();
+            handles.push(tokio::spawn(async move {
+                m.call_tool("slack", &format!("tool_{}", i), serde_json::json!({}))
+                    .await
+            }));
+        }
+
+        for h in handles {
+            let result = h.await.unwrap();
+            assert!(result.is_ok());
+        }
+
+        mgr.close().await.unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_call_tool_with_timeout() {
+        let slow_connect: ConnectFn = Arc::new(|_name, _cfg| {
+            Box::pin(async { Ok(Box::new(MockUpstream::new(vec![])) as Box<dyn Upstream>) })
+        });
+
+        let mgr = Manager::new(
+            test_configs(),
+            Duration::from_secs(300),
+            Duration::from_secs(5), // 5 second timeout
+            slow_connect,
+        );
+
+        // Normal call should succeed within timeout
+        let result = mgr.call_tool("slack", "send", serde_json::json!({})).await;
+        assert!(result.is_ok());
+
+        mgr.close().await.unwrap();
+    }
 }

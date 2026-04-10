@@ -335,4 +335,164 @@ mod tests {
         cat.refresh(updated).unwrap();
         assert_eq!(cat.server_tools("slack").len(), 1);
     }
+
+    // --- New tests ---
+
+    #[test]
+    fn test_refresh_multiple_servers() {
+        let dir = tempfile::tempdir().unwrap();
+        let cat = Catalog::new(dir.path().join("tools.json"));
+
+        let mut server_tools = HashMap::new();
+        server_tools.insert("slack".into(), test_tools()[..2].to_vec());
+        server_tools.insert("github".into(), vec![test_tools()[2].clone()]);
+        cat.refresh(server_tools).unwrap();
+
+        assert_eq!(cat.tool_count(), 3);
+        assert_eq!(cat.server_names(), vec!["github", "slack"]);
+
+        // Now refresh with a third server added
+        let mut more = HashMap::new();
+        more.insert(
+            "notion".into(),
+            vec![ToolEntry {
+                name: "notion__search".into(),
+                server_name: "notion".into(),
+                original_name: "search".into(),
+                description: "Search pages".into(),
+                input_schema: json!(null),
+                compact_params: "".into(),
+            }],
+        );
+        cat.refresh(more).unwrap();
+
+        // slack and github should be retained, notion added
+        assert_eq!(cat.tool_count(), 4);
+        assert_eq!(cat.server_names(), vec!["github", "notion", "slack"]);
+    }
+
+    #[test]
+    fn test_get_tool_error_message() {
+        let dir = tempfile::tempdir().unwrap();
+        let cat = Catalog::new(dir.path().join("tools.json"));
+
+        let err = cat.get_tool("nonexistent__tool").unwrap_err();
+        assert!(err.to_string().contains("nonexistent__tool"));
+    }
+
+    #[test]
+    fn test_tool_count_after_refresh() {
+        let dir = tempfile::tempdir().unwrap();
+        let cat = Catalog::new(dir.path().join("tools.json"));
+        assert_eq!(cat.tool_count(), 0);
+
+        let mut server_tools = HashMap::new();
+        server_tools.insert("a".into(), test_tools()[..1].to_vec());
+        cat.refresh(server_tools).unwrap();
+        assert_eq!(cat.tool_count(), 1);
+
+        let mut more = HashMap::new();
+        more.insert("b".into(), test_tools()[1..].to_vec());
+        cat.refresh(more).unwrap();
+        assert_eq!(cat.tool_count(), 3);
+    }
+
+    #[test]
+    fn test_empty_server_tools() {
+        let dir = tempfile::tempdir().unwrap();
+        let cat = Catalog::new(dir.path().join("tools.json"));
+
+        // Refresh with a server that has zero tools
+        let mut server_tools = HashMap::new();
+        server_tools.insert("empty_server".into(), vec![]);
+        cat.refresh(server_tools).unwrap();
+
+        // An empty server should not appear in server_names since by_server won't have entries
+        assert_eq!(cat.tool_count(), 0);
+        assert!(cat.server_names().is_empty());
+    }
+
+    #[test]
+    fn test_all_tools_sorted() {
+        let dir = tempfile::tempdir().unwrap();
+        let cat = Catalog::new(dir.path().join("tools.json"));
+
+        let mut server_tools = HashMap::new();
+        server_tools.insert(
+            "z_server".into(),
+            vec![ToolEntry {
+                name: "z_server__z_tool".into(),
+                server_name: "z_server".into(),
+                original_name: "z_tool".into(),
+                description: "".into(),
+                input_schema: json!(null),
+                compact_params: "".into(),
+            }],
+        );
+        server_tools.insert(
+            "a_server".into(),
+            vec![ToolEntry {
+                name: "a_server__a_tool".into(),
+                server_name: "a_server".into(),
+                original_name: "a_tool".into(),
+                description: "".into(),
+                input_schema: json!(null),
+                compact_params: "".into(),
+            }],
+        );
+        cat.refresh(server_tools).unwrap();
+
+        let all = cat.all_tools();
+        assert_eq!(all[0].name, "a_server__a_tool");
+        assert_eq!(all[1].name, "z_server__z_tool");
+    }
+
+    #[test]
+    fn test_server_names_sorted() {
+        let dir = tempfile::tempdir().unwrap();
+        let cat = Catalog::new(dir.path().join("tools.json"));
+
+        let mut server_tools = HashMap::new();
+        let mut tool_for_zebra = test_tools()[0].clone();
+        tool_for_zebra.server_name = "zebra".into();
+        server_tools.insert("zebra".into(), vec![tool_for_zebra]);
+        let mut tool_for_alpha = test_tools()[1].clone();
+        tool_for_alpha.server_name = "alpha".into();
+        server_tools.insert("alpha".into(), vec![tool_for_alpha]);
+        let mut tool_for_mid = test_tools()[2].clone();
+        tool_for_mid.server_name = "mid".into();
+        server_tools.insert("mid".into(), vec![tool_for_mid]);
+        cat.refresh(server_tools).unwrap();
+
+        let names = cat.server_names();
+        assert_eq!(names, vec!["alpha", "mid", "zebra"]);
+    }
+
+    #[test]
+    fn test_concurrent_reads() {
+        use std::sync::Arc;
+
+        let dir = tempfile::tempdir().unwrap();
+        let cat = Arc::new(Catalog::new(dir.path().join("tools.json")));
+
+        let mut server_tools = HashMap::new();
+        server_tools.insert("slack".into(), test_tools()[..2].to_vec());
+        server_tools.insert("github".into(), vec![test_tools()[2].clone()]);
+        cat.refresh(server_tools).unwrap();
+
+        let mut handles = Vec::new();
+        for _ in 0..10 {
+            let c = cat.clone();
+            handles.push(std::thread::spawn(move || {
+                assert_eq!(c.tool_count(), 3);
+                assert_eq!(c.all_tools().len(), 3);
+                assert_eq!(c.server_names().len(), 2);
+                assert!(c.get_tool("slack__send").is_ok());
+            }));
+        }
+
+        for h in handles {
+            h.join().unwrap();
+        }
+    }
 }

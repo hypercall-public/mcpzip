@@ -310,4 +310,128 @@ mod tests {
 
         server.abort();
     }
+
+    // --- New tests ---
+
+    #[tokio::test]
+    async fn test_list_tools_multiple() {
+        let (ct, st) = memory_transport_pair();
+        let ct = Arc::new(ct);
+        let st = Arc::new(st);
+
+        let tools = vec![
+            ToolInfo {
+                name: "tool_a".into(),
+                description: Some("Tool A".into()),
+                input_schema: Some(json!({"type": "object"})),
+            },
+            ToolInfo {
+                name: "tool_b".into(),
+                description: Some("Tool B".into()),
+                input_schema: None,
+            },
+            ToolInfo {
+                name: "tool_c".into(),
+                description: None,
+                input_schema: None,
+            },
+        ];
+
+        let server = tokio::spawn(mock_server(st, tools));
+        let client = McpClient::new(ct);
+        client.initialize().await.unwrap();
+
+        let result = client.list_tools().await.unwrap();
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0].name, "tool_a");
+        assert_eq!(result[1].name, "tool_b");
+        assert_eq!(result[2].name, "tool_c");
+
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn test_call_tool_with_args() {
+        let (ct, st) = memory_transport_pair();
+        let ct = Arc::new(ct);
+        let st = Arc::new(st);
+
+        let server = tokio::spawn(mock_server(st, vec![]));
+        let client = McpClient::new(ct);
+        client.initialize().await.unwrap();
+
+        let result = client
+            .call_tool(
+                "send_message",
+                json!({"channel": "#general", "text": "hello"}),
+            )
+            .await
+            .unwrap();
+        assert_eq!(result.content.len(), 1);
+        let ContentItem::Text { text } = &result.content[0];
+        assert!(text.contains("send_message"));
+
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_requests() {
+        let (ct, st) = memory_transport_pair();
+        let ct = Arc::new(ct);
+        let st = Arc::new(st);
+
+        let server = tokio::spawn(mock_server(st, vec![]));
+        let client = Arc::new(McpClient::new(ct));
+        client.initialize().await.unwrap();
+
+        // Fire multiple concurrent list_tools requests
+        let mut handles = Vec::new();
+        for _ in 0..5 {
+            let c = client.clone();
+            handles.push(tokio::spawn(async move { c.list_tools().await }));
+        }
+
+        for h in handles {
+            let result = h.await.unwrap();
+            assert!(result.is_ok());
+        }
+
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn test_client_close() {
+        let (ct, st) = memory_transport_pair();
+        let ct = Arc::new(ct);
+        let st = Arc::new(st);
+
+        let server = tokio::spawn(mock_server(st, vec![]));
+        let mut client = McpClient::new(ct);
+        client.initialize().await.unwrap();
+
+        // Close should not panic
+        client.close();
+        // Calling close again should be fine (idempotent - handle is taken)
+        client.close();
+
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn test_initialize_server_info() {
+        let (ct, st) = memory_transport_pair();
+        let ct = Arc::new(ct);
+        let st = Arc::new(st);
+
+        let server = tokio::spawn(mock_server(st, vec![]));
+        let client = McpClient::new(ct);
+
+        let result = client.initialize().await.unwrap();
+        assert_eq!(result.protocol_version, "2024-11-05");
+        assert_eq!(result.server_info.name, "mock");
+        assert_eq!(result.server_info.version, "1.0");
+        assert!(result.capabilities.tools.is_some());
+
+        server.abort();
+    }
 }

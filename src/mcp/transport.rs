@@ -119,4 +119,73 @@ mod tests {
         let (a, _b) = memory_transport_pair();
         accepts_trait_object(&a);
     }
+
+    // --- New tests ---
+
+    #[tokio::test]
+    async fn test_complex_json_message() {
+        let (a, b) = memory_transport_pair();
+        let msg = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "test_tool",
+                "arguments": {
+                    "nested": {"deeply": {"nested": true}},
+                    "array": [1, 2, 3, {"x": "y"}],
+                    "null_val": null,
+                    "number": 3.14159
+                }
+            }
+        });
+        a.send(msg.clone()).await.unwrap();
+        let received = b.receive().await.unwrap();
+        assert_eq!(received, msg);
+    }
+
+    #[tokio::test]
+    async fn test_eof_on_closed_transport() {
+        let (a, b) = memory_transport_pair();
+        drop(a); // close the writer side
+        let result = b.receive().await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_many_messages() {
+        let (a, b) = memory_transport_pair();
+        let count = 50;
+
+        for i in 0..count {
+            a.send(json!({"n": i})).await.unwrap();
+        }
+
+        for i in 0..count {
+            let received = b.receive().await.unwrap();
+            assert_eq!(received["n"], i);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_unicode_message() {
+        let (a, b) = memory_transport_pair();
+        let msg = json!({
+            "text": "Hello 🌍! Ñoño café résumé 日本語 中文 한국어",
+            "emoji": "🎉🚀💻",
+            "math": "∑∫∂√π"
+        });
+        a.send(msg.clone()).await.unwrap();
+        let received = b.receive().await.unwrap();
+        assert_eq!(received, msg);
+    }
+
+    #[tokio::test]
+    async fn test_empty_object_message() {
+        let (a, b) = memory_transport_pair();
+        let msg = json!({});
+        a.send(msg.clone()).await.unwrap();
+        let received = b.receive().await.unwrap();
+        assert_eq!(received, msg);
+    }
 }

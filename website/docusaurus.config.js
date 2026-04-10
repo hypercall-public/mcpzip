@@ -16,6 +16,12 @@ const config = {
   onBrokenLinks: "throw",
   onBrokenMarkdownLinks: "warn",
 
+  markdown: {
+    mermaid: true,
+  },
+
+  themes: ["@docusaurus/theme-mermaid"],
+
   i18n: {
     defaultLocale: "en",
     locales: ["en"],
@@ -30,7 +36,13 @@ const config = {
           sidebarPath: "./sidebars.js",
           editUrl: "https://github.com/hypercall-public/mcpzip/tree/main/website/",
         },
-        blog: false,
+        blog: {
+          blogTitle: "Blog",
+          blogDescription: "Engineering blog from the mcpzip team",
+          blogSidebarTitle: "Recent Posts",
+          blogSidebarCount: "ALL",
+          showReadingTime: true,
+        },
         theme: {
           customCss: "./src/css/custom.css",
         },
@@ -58,6 +70,11 @@ const config = {
             sidebarId: "docsSidebar",
             position: "left",
             label: "Docs",
+          },
+          {
+            to: "/blog",
+            label: "Blog",
+            position: "left",
           },
           {
             href: "https://hypercall.xyz",
@@ -95,13 +112,22 @@ const config = {
               },
             ],
           },
+          {
+            title: "Blog",
+            items: [
+              { label: "Latest Posts", to: "/blog" },
+            ],
+          },
         ],
         copyright: `\u00a9 ${new Date().getFullYear()} <a href="https://hypercall.xyz" style="color: #5CF53D;">Hypercall</a>`,
       },
       prism: {
         theme: prismThemes.oneDark,
         darkTheme: prismThemes.oneDark,
-        additionalLanguages: ["rust", "json", "bash", "toml"],
+        additionalLanguages: ["rust", "json", "bash", "toml", "go"],
+      },
+      mermaid: {
+        theme: { light: "dark", dark: "dark" },
       },
     }),
 };

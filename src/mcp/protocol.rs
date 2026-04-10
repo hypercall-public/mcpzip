@@ -372,4 +372,216 @@ mod tests {
         assert!(v["capabilities"]["tools"].is_object());
         assert_eq!(v["serverInfo"]["name"], "mcpzip");
     }
+
+    // --- New tests ---
+
+    #[test]
+    fn test_request_with_params() {
+        let req = make_request(
+            42,
+            "tools/call",
+            Some(json!({"name": "test", "arguments": {"a": 1}})),
+        );
+        let v = serde_json::to_value(&req).unwrap();
+        assert_eq!(v["id"], 42);
+        assert_eq!(v["method"], "tools/call");
+        assert_eq!(v["params"]["name"], "test");
+        assert_eq!(v["params"]["arguments"]["a"], 1);
+    }
+
+    #[test]
+    fn test_response_with_error_object() {
+        let resp = make_error_response(
+            Id::Number(99),
+            INVALID_PARAMS,
+            "missing required field".into(),
+        );
+        let v = serde_json::to_value(&resp).unwrap();
+        assert_eq!(v["id"], 99);
+        assert!(v["result"].is_null());
+        assert_eq!(v["error"]["code"], INVALID_PARAMS);
+        assert_eq!(v["error"]["message"], "missing required field");
+    }
+
+    #[test]
+    fn test_notification_with_params() {
+        let notif = make_notification("progress", Some(json!({"percent": 50})));
+        let v = serde_json::to_value(&notif).unwrap();
+        assert!(!v.as_object().unwrap().contains_key("id"));
+        assert_eq!(v["method"], "progress");
+        assert_eq!(v["params"]["percent"], 50);
+    }
+
+    #[test]
+    fn test_message_dispatch_non_object_fails() {
+        assert!(JsonRpcMessage::from_value(json!(42)).is_err());
+        assert!(JsonRpcMessage::from_value(json!("hello")).is_err());
+        assert!(JsonRpcMessage::from_value(json!([1, 2, 3])).is_err());
+        assert!(JsonRpcMessage::from_value(json!(null)).is_err());
+        assert!(JsonRpcMessage::from_value(json!(true)).is_err());
+    }
+
+    #[test]
+    fn test_message_dispatch_extra_fields_ignored() {
+        let v = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "test",
+            "extra_field": "should be ignored",
+            "another": 42
+        });
+        let msg = JsonRpcMessage::from_value(v).unwrap();
+        match msg {
+            JsonRpcMessage::Request(req) => {
+                assert_eq!(req.method, "test");
+                assert_eq!(req.id, Id::Number(1));
+            }
+            _ => panic!("expected Request"),
+        }
+    }
+
+    #[test]
+    fn test_message_dispatch_string_id() {
+        let v = json!({
+            "jsonrpc": "2.0",
+            "id": "abc-123",
+            "method": "test"
+        });
+        let msg = JsonRpcMessage::from_value(v).unwrap();
+        match msg {
+            JsonRpcMessage::Request(req) => {
+                assert_eq!(req.id, Id::Str("abc-123".into()));
+            }
+            _ => panic!("expected Request"),
+        }
+    }
+
+    #[test]
+    fn test_content_item_serde() {
+        let item = ContentItem::Text {
+            text: "hello world".into(),
+        };
+        let v = serde_json::to_value(&item).unwrap();
+        assert_eq!(v["type"], "text");
+        assert_eq!(v["text"], "hello world");
+
+        // Deserialize back
+        let parsed: ContentItem = serde_json::from_value(v).unwrap();
+        match parsed {
+            ContentItem::Text { text } => assert_eq!(text, "hello world"),
+        }
+    }
+
+    #[test]
+    fn test_make_response_fields() {
+        let resp = make_response(Id::Str("req-1".into()), json!({"status": "ok"}));
+        assert_eq!(resp.jsonrpc, "2.0");
+        assert_eq!(resp.id, Id::Str("req-1".into()));
+        assert!(resp.error.is_none());
+        assert_eq!(resp.result.unwrap()["status"], "ok");
+    }
+
+    #[test]
+    fn test_make_error_response_fields() {
+        let resp = make_error_response(Id::Number(5), INTERNAL_ERROR, "boom".into());
+        assert_eq!(resp.jsonrpc, "2.0");
+        assert_eq!(resp.id, Id::Number(5));
+        assert!(resp.result.is_none());
+        let err = resp.error.unwrap();
+        assert_eq!(err.code, INTERNAL_ERROR);
+        assert_eq!(err.message, "boom");
+        assert!(err.data.is_none());
+    }
+
+    #[test]
+    fn test_make_notification_fields() {
+        let notif = make_notification("test/method", None);
+        assert_eq!(notif.jsonrpc, "2.0");
+        assert_eq!(notif.method, "test/method");
+        assert!(notif.params.is_none());
+    }
+
+    #[test]
+    fn test_make_request_fields() {
+        let req = make_request(100, "my/method", Some(json!({"key": "value"})));
+        assert_eq!(req.jsonrpc, "2.0");
+        assert_eq!(req.id, Id::Number(100));
+        assert_eq!(req.method, "my/method");
+        assert_eq!(req.params.unwrap()["key"], "value");
+    }
+
+    #[test]
+    fn test_tool_info_optional_fields() {
+        // Minimal ToolInfo with no description or schema
+        let ti = ToolInfo {
+            name: "test".into(),
+            description: None,
+            input_schema: None,
+        };
+        let v = serde_json::to_value(&ti).unwrap();
+        assert_eq!(v["name"], "test");
+        assert!(!v.as_object().unwrap().contains_key("description"));
+        assert!(!v.as_object().unwrap().contains_key("inputSchema"));
+
+        // Full ToolInfo
+        let ti = ToolInfo {
+            name: "test".into(),
+            description: Some("A test tool".into()),
+            input_schema: Some(json!({"type": "object"})),
+        };
+        let v = serde_json::to_value(&ti).unwrap();
+        assert_eq!(v["description"], "A test tool");
+        assert_eq!(v["inputSchema"]["type"], "object");
+    }
+
+    #[test]
+    fn test_call_tool_params_serde() {
+        let params = CallToolParams {
+            name: "my_tool".into(),
+            arguments: Some(json!({"key": "value"})),
+        };
+        let json_str = serde_json::to_string(&params).unwrap();
+        let parsed: CallToolParams = serde_json::from_str(&json_str).unwrap();
+        assert_eq!(parsed.name, "my_tool");
+        assert_eq!(parsed.arguments.unwrap()["key"], "value");
+    }
+
+    #[test]
+    fn test_call_tool_params_no_args() {
+        let params = CallToolParams {
+            name: "simple_tool".into(),
+            arguments: None,
+        };
+        let v = serde_json::to_value(&params).unwrap();
+        assert!(!v.as_object().unwrap().contains_key("arguments"));
+    }
+
+    #[test]
+    fn test_call_tool_result_serde() {
+        let result = CallToolResult {
+            content: vec![
+                ContentItem::Text {
+                    text: "line 1".into(),
+                },
+                ContentItem::Text {
+                    text: "line 2".into(),
+                },
+            ],
+            is_error: Some(true),
+        };
+        let v = serde_json::to_value(&result).unwrap();
+        assert_eq!(v["content"].as_array().unwrap().len(), 2);
+        assert_eq!(v["isError"], true);
+
+        let parsed: CallToolResult = serde_json::from_value(v).unwrap();
+        assert_eq!(parsed.content.len(), 2);
+        assert_eq!(parsed.is_error, Some(true));
+    }
+
+    #[test]
+    fn test_error_code_constants() {
+        assert_eq!(METHOD_NOT_FOUND, -32601);
+        assert_eq!(INVALID_PARAMS, -32602);
+        assert_eq!(INTERNAL_ERROR, -32603);
+    }
 }

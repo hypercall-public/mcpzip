@@ -350,4 +350,276 @@ mod tests {
         assert_send_sync::<SearchResult>();
         assert_send_sync::<ProxyConfig>();
     }
+
+    // --- New tests ---
+
+    #[test]
+    fn test_compact_params_deeply_nested_schema() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "config": {
+                    "type": "object",
+                    "properties": {
+                        "nested": {"type": "string"}
+                    }
+                }
+            },
+            "required": ["config"]
+        });
+        assert_eq!(compact_params_from_schema(&schema), "config:object*");
+    }
+
+    #[test]
+    fn test_compact_params_many_params() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "alpha": {"type": "string"},
+                "beta": {"type": "integer"},
+                "gamma": {"type": "boolean"},
+                "delta": {"type": "number"},
+                "epsilon": {"type": "array"}
+            },
+            "required": ["alpha", "beta"]
+        });
+        let result = compact_params_from_schema(&schema);
+        assert_eq!(
+            result,
+            "alpha:string*, beta:integer*, delta:number, epsilon:array, gamma:boolean"
+        );
+    }
+
+    #[test]
+    fn test_compact_params_all_required() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "a": {"type": "string"},
+                "b": {"type": "integer"}
+            },
+            "required": ["a", "b"]
+        });
+        assert_eq!(compact_params_from_schema(&schema), "a:string*, b:integer*");
+    }
+
+    #[test]
+    fn test_compact_params_no_type_returns_any() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "x": {}
+            }
+        });
+        assert_eq!(compact_params_from_schema(&schema), "x:any");
+    }
+
+    #[test]
+    fn test_compact_params_nullable_only() {
+        // type: ["null"] with no non-null type => returns "null"
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "v": {"type": ["null"]}
+            }
+        });
+        assert_eq!(compact_params_from_schema(&schema), "v:null");
+    }
+
+    #[test]
+    fn test_compact_params_any_of_null_only() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "v": {"anyOf": [{"type": "null"}]}
+            }
+        });
+        assert_eq!(compact_params_from_schema(&schema), "v:null");
+    }
+
+    #[test]
+    fn test_compact_params_no_properties_key() {
+        let schema = json!({"type": "object"});
+        assert_eq!(compact_params_from_schema(&schema), "");
+    }
+
+    #[test]
+    fn test_compact_params_non_object_schema() {
+        assert_eq!(compact_params_from_schema(&json!("string")), "");
+        assert_eq!(compact_params_from_schema(&json!(42)), "");
+        assert_eq!(compact_params_from_schema(&json!(true)), "");
+        assert_eq!(compact_params_from_schema(&json!([1, 2, 3])), "");
+    }
+
+    #[test]
+    fn test_parse_prefixed_name_empty_string() {
+        assert!(parse_prefixed_name("").is_err());
+    }
+
+    #[test]
+    fn test_parse_prefixed_name_separator_only() {
+        let (server, tool) = parse_prefixed_name("__").unwrap();
+        assert_eq!(server, "");
+        assert_eq!(tool, "");
+    }
+
+    #[test]
+    fn test_parse_prefixed_name_multiple_separators() {
+        let (server, tool) = parse_prefixed_name("a__b__c__d").unwrap();
+        assert_eq!(server, "a");
+        assert_eq!(tool, "b__c__d");
+    }
+
+    #[test]
+    fn test_effective_type_sse() {
+        let cfg = ServerConfig {
+            server_type: Some("sse".into()),
+            command: None,
+            args: None,
+            env: None,
+            url: Some("https://example.com/sse".into()),
+            headers: None,
+        };
+        assert_eq!(cfg.effective_type(), "sse");
+    }
+
+    #[test]
+    fn test_proxy_config_full_serde_roundtrip() {
+        let cfg = ProxyConfig {
+            gemini_api_key: Some("test-key-123".into()),
+            search: SearchConfig {
+                default_limit: Some(10),
+                model: Some("gemini-2.0-flash".into()),
+            },
+            idle_timeout_minutes: Some(5),
+            call_timeout_seconds: Some(120),
+            mcp_servers: {
+                let mut m = HashMap::new();
+                m.insert(
+                    "slack".into(),
+                    ServerConfig {
+                        server_type: None,
+                        command: Some("slack-mcp".into()),
+                        args: Some(vec!["--token".into(), "xxx".into()]),
+                        env: Some({
+                            let mut e = HashMap::new();
+                            e.insert("API_KEY".into(), "secret".into());
+                            e
+                        }),
+                        url: None,
+                        headers: None,
+                    },
+                );
+                m.insert(
+                    "todoist".into(),
+                    ServerConfig {
+                        server_type: Some("http".into()),
+                        command: None,
+                        args: None,
+                        env: None,
+                        url: Some("https://todoist.com/mcp".into()),
+                        headers: Some({
+                            let mut h = HashMap::new();
+                            h.insert("Authorization".into(), "Bearer token".into());
+                            h
+                        }),
+                    },
+                );
+                m
+            },
+        };
+
+        let json_str = serde_json::to_string(&cfg).unwrap();
+        let parsed: ProxyConfig = serde_json::from_str(&json_str).unwrap();
+
+        assert_eq!(parsed.gemini_api_key, Some("test-key-123".into()));
+        assert_eq!(parsed.search.default_limit, Some(10));
+        assert_eq!(parsed.search.model, Some("gemini-2.0-flash".into()));
+        assert_eq!(parsed.idle_timeout_minutes, Some(5));
+        assert_eq!(parsed.call_timeout_seconds, Some(120));
+        assert_eq!(parsed.mcp_servers.len(), 2);
+        assert_eq!(parsed.mcp_servers["slack"].effective_type(), "stdio");
+        assert_eq!(parsed.mcp_servers["todoist"].effective_type(), "http");
+        assert_eq!(
+            parsed.mcp_servers["todoist"].url,
+            Some("https://todoist.com/mcp".into())
+        );
+    }
+
+    #[test]
+    fn test_server_config_serialization_skip_none() {
+        let cfg = ServerConfig {
+            server_type: None,
+            command: Some("echo".into()),
+            args: None,
+            env: None,
+            url: None,
+            headers: None,
+        };
+        let json_str = serde_json::to_string(&cfg).unwrap();
+        assert!(!json_str.contains("type"));
+        assert!(!json_str.contains("args"));
+        assert!(!json_str.contains("env"));
+        assert!(!json_str.contains("url"));
+        assert!(!json_str.contains("headers"));
+        assert!(json_str.contains("command"));
+    }
+
+    #[test]
+    fn test_search_result_serde() {
+        let sr = SearchResult {
+            name: "slack__send".into(),
+            description: "Send a message".into(),
+            compact_params: "msg:string*".into(),
+        };
+        let json_str = serde_json::to_string(&sr).unwrap();
+        let parsed: SearchResult = serde_json::from_str(&json_str).unwrap();
+        assert_eq!(parsed.name, "slack__send");
+        assert_eq!(parsed.description, "Send a message");
+        assert_eq!(parsed.compact_params, "msg:string*");
+    }
+
+    #[test]
+    fn test_server_status_serde() {
+        let status = ServerStatus {
+            name: "slack".into(),
+            connected: true,
+            tool_count: 42,
+            last_refresh: "2024-01-01T00:00:00Z".into(),
+            error: None,
+        };
+        let json_str = serde_json::to_string(&status).unwrap();
+        let parsed: ServerStatus = serde_json::from_str(&json_str).unwrap();
+        assert_eq!(parsed.name, "slack");
+        assert!(parsed.connected);
+        assert_eq!(parsed.tool_count, 42);
+        assert!(parsed.error.is_none());
+        // Verify "error" is omitted from JSON when None
+        assert!(!json_str.contains("error"));
+    }
+
+    #[test]
+    fn test_server_status_serde_with_error() {
+        let status = ServerStatus {
+            name: "github".into(),
+            connected: false,
+            tool_count: 0,
+            last_refresh: "2024-01-01T00:00:00Z".into(),
+            error: Some("connection refused".into()),
+        };
+        let json_str = serde_json::to_string(&status).unwrap();
+        let parsed: ServerStatus = serde_json::from_str(&json_str).unwrap();
+        assert!(!parsed.connected);
+        assert_eq!(parsed.error, Some("connection refused".into()));
+    }
+
+    #[test]
+    fn test_prefixed_name_roundtrip() {
+        let server = "my_server";
+        let tool = "my_tool";
+        let prefixed = prefixed_name(server, tool);
+        let (parsed_server, parsed_tool) = parse_prefixed_name(&prefixed).unwrap();
+        assert_eq!(parsed_server, server);
+        assert_eq!(parsed_tool, tool);
+    }
 }

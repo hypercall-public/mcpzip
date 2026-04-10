@@ -191,4 +191,128 @@ mod tests {
             h.join().unwrap();
         }
     }
+
+    // --- New tests ---
+
+    #[test]
+    fn test_put_replaces_existing() {
+        let c = QueryCache::new();
+        let results1 = vec![SearchResult {
+            name: "tool_old".into(),
+            description: "Old".into(),
+            compact_params: "".into(),
+        }];
+        let results2 = vec![SearchResult {
+            name: "tool_new".into(),
+            description: "New".into(),
+            compact_params: "".into(),
+        }];
+
+        c.put("query", results1);
+        let got1 = c.get("query").unwrap();
+        assert_eq!(got1[0].name, "tool_old");
+
+        c.put("query", results2);
+        let got2 = c.get("query").unwrap();
+        assert_eq!(got2[0].name, "tool_new");
+    }
+
+    #[test]
+    fn test_case_insensitive() {
+        let c = QueryCache::new();
+        c.put("Slack Send Message", sample_results());
+
+        // Should match case-insensitively
+        let got = c.get("slack send message");
+        assert!(got.is_some());
+        assert_eq!(got.unwrap().len(), sample_results().len());
+    }
+
+    #[test]
+    fn test_key_dedup() {
+        let c = QueryCache::new();
+        c.put("slack slack send", sample_results());
+
+        // "slack send" normalized => "slack send" (deduped)
+        // The stored key "slack slack send" normalizes to "slack send"
+        // Exact match should work
+        let got = c.get("slack send");
+        assert!(got.is_some());
+    }
+
+    #[test]
+    fn test_overlap_at_60_percent_boundary() {
+        let c = QueryCache::new();
+        // Cached: "alpha beta gamma delta epsilon" (5 tokens)
+        c.put(
+            "alpha beta gamma delta epsilon",
+            vec![SearchResult {
+                name: "test".into(),
+                description: "".into(),
+                compact_params: "".into(),
+            }],
+        );
+
+        // Query: 5 tokens, 3 match => 60% exactly. Should match.
+        let got_60 = c.get("alpha beta gamma x y");
+        assert!(got_60.is_some());
+
+        // Query: 5 tokens, 2 match => 40%. Should NOT match.
+        let got_40 = c.get("alpha beta x y z");
+        assert!(got_40.is_none());
+    }
+
+    #[test]
+    fn test_single_token_overlap() {
+        let c = QueryCache::new();
+        c.put("slack", sample_results());
+
+        // 1/1 = 100% overlap
+        let got = c.get("slack");
+        assert!(got.is_some());
+
+        // Single token, no overlap
+        let got_miss = c.get("github");
+        assert!(got_miss.is_none());
+    }
+
+    #[test]
+    fn test_many_entries() {
+        let c = QueryCache::new();
+        for i in 0..100 {
+            c.put(
+                &format!("query_{}", i),
+                vec![SearchResult {
+                    name: format!("tool_{}", i),
+                    description: "".into(),
+                    compact_params: "".into(),
+                }],
+            );
+        }
+
+        // Verify all entries are retrievable
+        for i in 0..100 {
+            let got = c.get(&format!("query_{}", i));
+            assert!(got.is_some(), "entry {} should exist", i);
+            assert_eq!(got.unwrap()[0].name, format!("tool_{}", i));
+        }
+    }
+
+    #[test]
+    fn test_default_constructor() {
+        let c = QueryCache::default();
+        assert!(c.get("anything").is_none());
+        c.put("test", sample_results());
+        assert!(c.get("test").is_some());
+    }
+
+    #[test]
+    fn test_whitespace_query_miss() {
+        let c = QueryCache::new();
+        c.put("slack send", sample_results());
+
+        // Pure whitespace normalizes to empty string, which should return None
+        let got = c.get("   ");
+        assert!(got.is_none());
+    }
 }

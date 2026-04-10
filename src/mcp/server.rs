@@ -259,4 +259,227 @@ mod tests {
         cancel.cancel();
         let _ = srv_handle.await;
     }
+
+    // --- New tests ---
+
+    #[tokio::test]
+    async fn test_server_multiple_handlers() {
+        let (client_t, server_t) = memory_transport_pair();
+        let client_t = Arc::new(client_t);
+        let server_t = Arc::new(server_t);
+
+        let mut server = McpServer::new(server_t);
+        server.on(
+            "tools/list",
+            Box::new(|_method, _params| {
+                Box::pin(async { Ok(json!({"tools": [{"name": "tool_a"}, {"name": "tool_b"}]})) })
+            }),
+        );
+        server.on(
+            "tools/call",
+            Box::new(|_method, params| {
+                Box::pin(async move {
+                    let name = params
+                        .and_then(|p| p.get("name").and_then(|n| n.as_str().map(String::from)))
+                        .unwrap_or_default();
+                    Ok(json!({"content": [{"type": "text", "text": format!("called {}", name)}]}))
+                })
+            }),
+        );
+
+        let cancel = tokio_util::sync::CancellationToken::new();
+        let cancel2 = cancel.clone();
+        let srv_handle = tokio::spawn(async move { server.run(cancel2).await });
+
+        // Call tools/list
+        let req1 = make_request(1, "tools/list", None);
+        client_t
+            .send(serde_json::to_value(&req1).unwrap())
+            .await
+            .unwrap();
+        let resp1 = client_t.receive().await.unwrap();
+        assert!(resp1["result"]["tools"].is_array());
+        assert_eq!(resp1["result"]["tools"].as_array().unwrap().len(), 2);
+
+        // Call tools/call
+        let req2 = make_request(2, "tools/call", Some(json!({"name": "test"})));
+        client_t
+            .send(serde_json::to_value(&req2).unwrap())
+            .await
+            .unwrap();
+        let resp2 = client_t.receive().await.unwrap();
+        assert!(resp2["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("test"));
+
+        cancel.cancel();
+        let _ = srv_handle.await;
+    }
+
+    #[tokio::test]
+    async fn test_server_handler_error() {
+        let (client_t, server_t) = memory_transport_pair();
+        let client_t = Arc::new(client_t);
+        let server_t = Arc::new(server_t);
+
+        let mut server = McpServer::new(server_t);
+        server.on(
+            "fail/method",
+            Box::new(|_method, _params| {
+                Box::pin(async {
+                    Err(crate::error::McpzipError::Protocol(
+                        "handler intentionally failed".into(),
+                    ))
+                })
+            }),
+        );
+
+        let cancel = tokio_util::sync::CancellationToken::new();
+        let cancel2 = cancel.clone();
+        let srv_handle = tokio::spawn(async move { server.run(cancel2).await });
+
+        let req = make_request(1, "fail/method", None);
+        client_t
+            .send(serde_json::to_value(&req).unwrap())
+            .await
+            .unwrap();
+        let resp = client_t.receive().await.unwrap();
+        assert!(resp.get("error").is_some());
+        assert_eq!(resp["error"]["code"], INTERNAL_ERROR);
+        assert!(resp["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("handler intentionally failed"));
+
+        cancel.cancel();
+        let _ = srv_handle.await;
+    }
+
+    #[tokio::test]
+    async fn test_server_cancellation() {
+        let (client_t, server_t) = memory_transport_pair();
+        let _client_t = Arc::new(client_t);
+        let server_t = Arc::new(server_t);
+
+        let server = McpServer::new(server_t);
+        let cancel = tokio_util::sync::CancellationToken::new();
+        let cancel2 = cancel.clone();
+
+        let srv_handle = tokio::spawn(async move { server.run(cancel2).await });
+
+        // Cancel immediately
+        cancel.cancel();
+        let result = srv_handle.await.unwrap();
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_server_no_instructions() {
+        let (client_t, server_t) = memory_transport_pair();
+        let client_t = Arc::new(client_t);
+        let server_t = Arc::new(server_t);
+
+        let server = McpServer::new(server_t);
+        let cancel = tokio_util::sync::CancellationToken::new();
+        let cancel2 = cancel.clone();
+
+        let srv_handle = tokio::spawn(async move { server.run(cancel2).await });
+
+        let req = make_request(1, "initialize", Some(json!({})));
+        client_t
+            .send(serde_json::to_value(&req).unwrap())
+            .await
+            .unwrap();
+        let resp = client_t.receive().await.unwrap();
+        // instructions should be absent (null) when not set
+        assert!(resp["result"]["instructions"].is_null());
+
+        cancel.cancel();
+        let _ = srv_handle.await;
+    }
+
+    #[tokio::test]
+    async fn test_server_default_capabilities() {
+        let (client_t, server_t) = memory_transport_pair();
+        let client_t = Arc::new(client_t);
+        let server_t = Arc::new(server_t);
+
+        let server = McpServer::new(server_t);
+        let cancel = tokio_util::sync::CancellationToken::new();
+        let cancel2 = cancel.clone();
+
+        let srv_handle = tokio::spawn(async move { server.run(cancel2).await });
+
+        let req = make_request(1, "initialize", Some(json!({})));
+        client_t
+            .send(serde_json::to_value(&req).unwrap())
+            .await
+            .unwrap();
+        let resp = client_t.receive().await.unwrap();
+        let caps = &resp["result"]["capabilities"];
+        // Default capabilities have all None fields, so capabilities should be empty object
+        assert!(caps.is_object());
+        assert!(!caps.as_object().unwrap().contains_key("tools"));
+
+        cancel.cancel();
+        let _ = srv_handle.await;
+    }
+
+    #[tokio::test]
+    async fn test_server_malformed_message() {
+        let (client_t, server_t) = memory_transport_pair();
+        let client_t = Arc::new(client_t);
+        let server_t = Arc::new(server_t);
+
+        let server = McpServer::new(server_t);
+        let cancel = tokio_util::sync::CancellationToken::new();
+        let cancel2 = cancel.clone();
+
+        let srv_handle = tokio::spawn(async move { server.run(cancel2).await });
+
+        // Send a malformed message (neither request nor notification)
+        client_t.send(json!({"jsonrpc": "2.0"})).await.unwrap();
+
+        // Server should not crash - verify with a valid request
+        let req = make_request(1, "initialize", Some(json!({})));
+        client_t
+            .send(serde_json::to_value(&req).unwrap())
+            .await
+            .unwrap();
+        let resp = client_t.receive().await.unwrap();
+        assert!(resp.get("result").is_some());
+
+        cancel.cancel();
+        let _ = srv_handle.await;
+    }
+
+    #[tokio::test]
+    async fn test_server_sequential_requests() {
+        let (client_t, server_t) = memory_transport_pair();
+        let client_t = Arc::new(client_t);
+        let server_t = Arc::new(server_t);
+
+        let mut server = McpServer::new(server_t);
+        server.on("echo", test_handler());
+
+        let cancel = tokio_util::sync::CancellationToken::new();
+        let cancel2 = cancel.clone();
+        let srv_handle = tokio::spawn(async move { server.run(cancel2).await });
+
+        // Send several sequential requests and verify each gets a response with correct ID
+        for i in 1u64..=5 {
+            let req = make_request(i, "echo", None);
+            client_t
+                .send(serde_json::to_value(&req).unwrap())
+                .await
+                .unwrap();
+            let resp = client_t.receive().await.unwrap();
+            assert_eq!(resp["id"], i);
+            assert!(resp.get("result").is_some());
+        }
+
+        cancel.cancel();
+        let _ = srv_handle.await;
+    }
 }

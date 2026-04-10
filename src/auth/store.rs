@@ -235,4 +235,143 @@ mod tests {
         fn assert_send_sync<T: Send + Sync>() {}
         assert_send_sync::<TokenStore>();
     }
+
+    // --- New tests ---
+
+    #[test]
+    fn test_save_overwrite() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = TokenStore::new(dir.path().join("auth"));
+
+        let tok1 = Token {
+            access_token: "original".into(),
+            token_type: None,
+            refresh_token: None,
+            expiry: None,
+        };
+        store.save("https://example.com", &tok1).unwrap();
+        assert_eq!(
+            store
+                .load("https://example.com")
+                .unwrap()
+                .unwrap()
+                .access_token,
+            "original"
+        );
+
+        let tok2 = Token {
+            access_token: "updated".into(),
+            token_type: Some("Bearer".into()),
+            refresh_token: Some("new-refresh".into()),
+            expiry: Some("2025-01-01T00:00:00Z".into()),
+        };
+        store.save("https://example.com", &tok2).unwrap();
+        let loaded = store.load("https://example.com").unwrap().unwrap();
+        assert_eq!(loaded.access_token, "updated");
+        assert_eq!(loaded.token_type, Some("Bearer".into()));
+        assert_eq!(loaded.refresh_token, Some("new-refresh".into()));
+        assert_eq!(loaded.expiry, Some("2025-01-01T00:00:00Z".into()));
+    }
+
+    #[test]
+    fn test_key_derivation_consistency() {
+        let store = TokenStore::new(Path::new("/tmp/test"));
+        let path1 = store.path("https://example.com");
+        let path2 = store.path("https://example.com");
+        assert_eq!(path1, path2);
+
+        // Different URLs should produce different paths
+        let path3 = store.path("https://other.com");
+        assert_ne!(path1, path3);
+    }
+
+    #[test]
+    fn test_token_serde() {
+        let tok = Token {
+            access_token: "access".into(),
+            token_type: Some("Bearer".into()),
+            refresh_token: Some("refresh".into()),
+            expiry: Some("2025-12-31T23:59:59Z".into()),
+        };
+        let json_str = serde_json::to_string(&tok).unwrap();
+        let parsed: Token = serde_json::from_str(&json_str).unwrap();
+        assert_eq!(parsed.access_token, "access");
+        assert_eq!(parsed.token_type, Some("Bearer".into()));
+        assert_eq!(parsed.refresh_token, Some("refresh".into()));
+        assert_eq!(parsed.expiry, Some("2025-12-31T23:59:59Z".into()));
+    }
+
+    #[test]
+    fn test_token_serde_minimal() {
+        let tok = Token {
+            access_token: "only-access".into(),
+            token_type: None,
+            refresh_token: None,
+            expiry: None,
+        };
+        let json_str = serde_json::to_string(&tok).unwrap();
+        // Optional fields with skip_serializing_if should be absent
+        assert!(!json_str.contains("token_type"));
+        assert!(!json_str.contains("refresh_token"));
+        assert!(!json_str.contains("expiry"));
+
+        let parsed: Token = serde_json::from_str(&json_str).unwrap();
+        assert_eq!(parsed.access_token, "only-access");
+        assert!(parsed.token_type.is_none());
+    }
+
+    #[test]
+    fn test_load_invalid_json_fields() {
+        // JSON with unexpected structure but valid JSON - should parse what it can
+        let dir = tempfile::tempdir().unwrap();
+        let auth_dir = dir.path().join("auth");
+        std::fs::create_dir_all(&auth_dir).unwrap();
+
+        let store = TokenStore::new(&auth_dir);
+        let path = store.path("https://example.com");
+        // Missing required field "access_token"
+        std::fs::write(&path, r#"{"token_type": "Bearer"}"#).unwrap();
+        // serde will fail to parse, treated as corrupt => returns None
+        let result = store.load("https://example.com").unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_save_creates_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let auth_dir = dir.path().join("deep").join("nested").join("auth");
+        assert!(!auth_dir.exists());
+
+        let store = TokenStore::new(&auth_dir);
+        let tok = Token {
+            access_token: "test".into(),
+            token_type: None,
+            refresh_token: None,
+            expiry: None,
+        };
+        store.save("https://example.com", &tok).unwrap();
+        assert!(auth_dir.exists());
+
+        let loaded = store.load("https://example.com").unwrap().unwrap();
+        assert_eq!(loaded.access_token, "test");
+    }
+
+    #[test]
+    fn test_load_extra_json_fields_tolerated() {
+        // Token JSON with extra fields should still deserialize fine
+        let dir = tempfile::tempdir().unwrap();
+        let auth_dir = dir.path().join("auth");
+        std::fs::create_dir_all(&auth_dir).unwrap();
+
+        let store = TokenStore::new(&auth_dir);
+        let path = store.path("https://example.com");
+        std::fs::write(
+            &path,
+            r#"{"access_token": "tok123", "extra_field": "ignored", "another": 42}"#,
+        )
+        .unwrap();
+
+        let loaded = store.load("https://example.com").unwrap().unwrap();
+        assert_eq!(loaded.access_token, "tok123");
+    }
 }

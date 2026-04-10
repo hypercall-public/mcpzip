@@ -302,4 +302,164 @@ mod tests {
 
         assert!(load_claude_code_config_from(&path).is_err());
     }
+
+    // --- New tests ---
+
+    #[test]
+    fn test_config_all_optional_fields_set() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        std::fs::write(
+            &path,
+            r#"{
+                "gemini_api_key": "abc123",
+                "search": {"default_limit": 20, "model": "gemini-2.0-flash"},
+                "idle_timeout_minutes": 10,
+                "call_timeout_seconds": 60,
+                "mcpServers": {
+                    "s": {"command": "test-cmd", "args": ["--flag"], "env": {"KEY": "val"}}
+                }
+            }"#,
+        )
+        .unwrap();
+
+        let cfg = load(&path).unwrap();
+        assert_eq!(cfg.gemini_api_key, Some("abc123".into()));
+        assert_eq!(cfg.search.default_limit, Some(20));
+        assert_eq!(cfg.search.model, Some("gemini-2.0-flash".into()));
+        assert_eq!(cfg.idle_timeout_minutes, Some(10));
+        assert_eq!(cfg.call_timeout_seconds, Some(60));
+        let server = &cfg.mcp_servers["s"];
+        assert_eq!(server.args, Some(vec!["--flag".into()]));
+        assert_eq!(server.env.as_ref().unwrap()["KEY"], "val");
+    }
+
+    #[test]
+    fn test_validate_sse_server_type() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        std::fs::write(
+            &path,
+            r#"{"mcpServers": {"x": {"type": "sse", "url": "https://example.com/sse"}}}"#,
+        )
+        .unwrap();
+
+        let cfg = load(&path).unwrap();
+        assert_eq!(cfg.mcp_servers["x"].effective_type(), "sse");
+    }
+
+    #[test]
+    fn test_validate_sse_no_url() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        std::fs::write(&path, r#"{"mcpServers": {"x": {"type": "sse"}}}"#).unwrap();
+
+        let err = load(&path).unwrap_err();
+        assert!(err.to_string().contains("must have a url"));
+    }
+
+    #[test]
+    fn test_config_with_headers() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        std::fs::write(
+            &path,
+            r#"{"mcpServers": {"x": {"type": "http", "url": "https://example.com", "headers": {"Authorization": "Bearer xyz", "X-Custom": "val"}}}}"#,
+        )
+        .unwrap();
+
+        let cfg = load(&path).unwrap();
+        let headers = cfg.mcp_servers["x"].headers.as_ref().unwrap();
+        assert_eq!(headers["Authorization"], "Bearer xyz");
+        assert_eq!(headers["X-Custom"], "val");
+    }
+
+    #[test]
+    fn test_validate_stdio_empty_command() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        std::fs::write(&path, r#"{"mcpServers": {"x": {"command": ""}}}"#).unwrap();
+
+        let err = load(&path).unwrap_err();
+        assert!(err.to_string().contains("must have a command"));
+    }
+
+    #[test]
+    fn test_validate_http_empty_url() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        std::fs::write(
+            &path,
+            r#"{"mcpServers": {"x": {"type": "http", "url": ""}}}"#,
+        )
+        .unwrap();
+
+        let err = load(&path).unwrap_err();
+        assert!(err.to_string().contains("must have a url"));
+    }
+
+    #[test]
+    fn test_config_mixed_valid_and_invalid() {
+        // The first invalid server should cause failure even if others are valid
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        std::fs::write(
+            &path,
+            r#"{"mcpServers": {
+                "good": {"command": "ok"},
+                "bad": {"type": "http"}
+            }}"#,
+        )
+        .unwrap();
+
+        let err = load(&path).unwrap_err();
+        assert!(err.to_string().contains("must have a url"));
+    }
+
+    #[test]
+    fn test_load_claude_code_config_missing_file() {
+        let result = load_claude_code_config_from(Path::new("/nonexistent/claude.json"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_load_claude_code_config_invalid_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("claude.json");
+        std::fs::write(&path, "not valid json at all").unwrap();
+
+        assert!(load_claude_code_config_from(&path).is_err());
+    }
+
+    #[test]
+    fn test_load_claude_code_config_multiple_servers() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("claude.json");
+        std::fs::write(
+            &path,
+            r#"{"mcpServers": {"a": {"command": "a-cmd"}, "b": {"command": "b-cmd"}, "c": {"type": "http", "url": "https://c.com"}}}"#,
+        )
+        .unwrap();
+
+        let cfg = load_claude_code_config_from(&path).unwrap();
+        assert_eq!(cfg.mcp_servers.len(), 3);
+    }
+
+    #[test]
+    fn test_config_server_with_args() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        std::fs::write(
+            &path,
+            r#"{"mcpServers": {"s": {"command": "my-cmd", "args": ["--port", "8080", "--verbose"]}}}"#,
+        )
+        .unwrap();
+
+        let cfg = load(&path).unwrap();
+        let args = cfg.mcp_servers["s"].args.as_ref().unwrap();
+        assert_eq!(args.len(), 3);
+        assert_eq!(args[0], "--port");
+        assert_eq!(args[1], "8080");
+        assert_eq!(args[2], "--verbose");
+    }
 }

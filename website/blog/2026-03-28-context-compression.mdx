@@ -1,0 +1,140 @@
+---
+slug: context-compression
+title: How mcpzip Saves 99% of Your Context Window
+authors: [hypercall]
+tags: [mcp, context-window, performance, ai]
+---
+
+import TokenSavingsCalculator from '@site/src/components/TokenSavingsCalculator';
+
+# How mcpzip Saves 99% of Your Context Window
+
+If you use MCP tools with Claude Code, you are probably burning tens of thousands of tokens on tool schemas -- before your conversation even starts. Here is the math, and how mcpzip fixes it.
+
+<!-- truncate -->
+
+## The Problem
+
+Every MCP tool has a JSON Schema that describes its parameters. When Claude Code connects to an MCP server, it calls `tools/list` and loads every tool schema into the context window. This happens on **every message**.
+
+A typical tool schema looks like this:
+
+```json
+{
+  "name": "send_message",
+  "description": "Send a message to a Slack channel or direct message",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "channel": {
+        "type": "string",
+        "description": "Channel ID or name (e.g., #general or C01234567)"
+      },
+      "text": {
+        "type": "string",
+        "description": "The message text, supports Slack markdown"
+      },
+      "thread_ts": {
+        "type": "string",
+        "description": "Thread timestamp to reply in a thread"
+      },
+      "unfurl_links": {
+        "type": "boolean",
+        "description": "Whether to unfurl URLs"
+      }
+    },
+    "required": ["channel", "text"]
+  }
+}
+```
+
+This single tool consumes **~350 tokens**. Now multiply.
+
+## The Math
+
+| Setup | Servers | Tools/Server | Total Tools | Tokens |
+|-------|---------|-------------|-------------|--------|
+| Light | 3 | 15 | 45 | 15,750 |
+| Medium | 5 | 30 | 150 | 52,500 |
+| Heavy | 10 | 50 | 500 | 175,000 |
+| Power | 15 | 60 | 900 | 315,000 |
+
+With Claude's 200K context window, a heavy setup uses **87.5%** of the context just for tool schemas. A power setup **exceeds** the context window entirely.
+
+## With mcpzip
+
+mcpzip replaces all tool schemas with exactly 3 meta-tools:
+
+| Meta-Tool | Purpose | Size |
+|-----------|---------|------|
+| `search_tools` | Find tools by query | ~400 tokens |
+| `describe_tool` | Get full schema on demand | ~400 tokens |
+| `execute_tool` | Run a tool | ~400 tokens |
+| **Total** | | **~1,200 tokens** |
+
+The savings:
+
+| Setup | Without mcpzip | With mcpzip | Savings |
+|-------|---------------|-------------|---------|
+| Light (45 tools) | 15,750 | 1,200 | **92.4%** |
+| Medium (150 tools) | 52,500 | 1,200 | **97.7%** |
+| Heavy (500 tools) | 175,000 | 1,200 | **99.3%** |
+| Power (900 tools) | 315,000 | 1,200 | **99.6%** |
+
+## Try It Yourself
+
+<TokenSavingsCalculator />
+
+## Why This Matters
+
+### 1. More Room for Conversation
+
+Every token spent on tool schemas is a token you cannot use for your actual conversation. With 500 tools consuming 175K tokens, you have only 25K tokens left for your prompt, conversation history, and model output. That is barely enough for a meaningful interaction.
+
+### 2. Faster Responses
+
+More context tokens means more processing time. The model has to read and attend to all those tool schemas on every message, even if it is not going to use any of them. Fewer tokens means faster inference.
+
+### 3. Better Tool Selection
+
+Research and practical experience show that LLMs make worse tool choices when presented with too many options. With 500 tools, the model might:
+- Pick a similar but wrong tool
+- Hallucinate parameters from a different tool
+- Fail to find the right tool entirely
+
+With 3 meta-tools and on-demand search, Claude gets exactly the tools it needs, when it needs them.
+
+### 4. No Hard Limits
+
+Some models cap the number of tools they can handle. GPT-4 starts degrading noticeably past ~60 tools. By compressing everything behind 3 meta-tools, mcpzip removes this limit entirely.
+
+## The Compact Representation
+
+When mcpzip returns search results, it uses a compact format that is ~7x smaller than full JSON schemas:
+
+```
+slack__send_message: Send a Slack message [channel:string*, text:string*]
+todoist__create_task: Create a new task [content:string*, project_id:string]
+github__create_issue: Create a GitHub issue [title:string*, body:string]
+```
+
+Each line is ~50 tokens instead of ~350 tokens. The `*` marks required parameters. Claude gets enough information to decide which tool to use and can optionally call `describe_tool` for the full schema if it needs more detail.
+
+## Getting Started
+
+```bash
+# Install
+cargo install --git https://github.com/hypercall-public/mcpzip
+
+# Migrate from existing Claude Code config
+mcpzip migrate --dry-run  # preview
+mcpzip migrate             # do it
+
+# Restart Claude Code
+```
+
+That is it. Your existing MCP servers keep working, but now they are behind mcpzip's 3 meta-tools instead of flooding the context window.
+
+---
+
+mcpzip is open source at [github.com/hypercall-public/mcpzip](https://github.com/hypercall-public/mcpzip). Built by [Hypercall](https://hypercall.xyz).

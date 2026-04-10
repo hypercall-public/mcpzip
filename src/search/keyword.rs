@@ -231,4 +231,90 @@ mod tests {
         assert!(tokenize("").is_empty());
         assert!(tokenize("   ").is_empty());
     }
+
+    // --- New tests ---
+
+    #[test]
+    fn test_mixed_separator_tokenization() {
+        // Query with mixed separators: hyphens, underscores, spaces
+        let tokens = tokenize("send_message list-channels");
+        assert_eq!(tokens, vec!["send", "message", "list-channels"]);
+    }
+
+    #[test]
+    fn test_tokenize_unicode() {
+        let tokens = tokenize("búsqueda herramienta");
+        assert_eq!(tokens, vec!["búsqueda", "herramienta"]);
+    }
+
+    #[test]
+    fn test_tokenize_only_underscores() {
+        let tokens = tokenize("___");
+        assert!(tokens.is_empty());
+    }
+
+    #[test]
+    fn test_description_match() {
+        let ks = make_searcher();
+        // "repository" appears in github__create_issue description but not in the name
+        let results = ks.search("repository", 10);
+        assert!(!results.is_empty());
+        // Both GitHub tools mention "repository"
+        let names: Vec<&str> = results.iter().map(|r| r.name.as_str()).collect();
+        assert!(names.contains(&"github__create_issue"));
+        assert!(names.contains(&"github__list_pull_requests"));
+    }
+
+    #[test]
+    fn test_zero_limit_returns_all() {
+        let ks = make_searcher();
+        // With limit=0, should return all matches (no truncation)
+        let results = ks.search("list", 0);
+        assert!(results.len() >= 2);
+    }
+
+    #[test]
+    fn test_single_char_query() {
+        let ks = make_searcher();
+        // Single char "a" should match tools containing "a" in name or description
+        let results = ks.search("a", 10);
+        // "a" appears in many entries: slack, channels, create, databases, etc.
+        assert!(!results.is_empty());
+    }
+
+    #[test]
+    fn test_empty_catalog() {
+        let empty_fn: CatalogFn = Arc::new(|| Vec::new());
+        let ks = KeywordSearcher::new(empty_fn);
+        let results = ks.search("slack", 10);
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_whitespace_query() {
+        let ks = make_searcher();
+        let results = ks.search("   ", 10);
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_search_result_has_compact_params() {
+        let ks = make_searcher();
+        let results = ks.search("send_message", 1);
+        assert!(!results.is_empty());
+        assert_eq!(
+            results[0].compact_params,
+            "channel:string*, message:string*"
+        );
+    }
+
+    #[test]
+    fn test_multi_token_scoring_order() {
+        let ks = make_searcher();
+        // "slack send message" has 3 tokens; send_message should match all 3
+        let results = ks.search("slack send message", 10);
+        assert!(!results.is_empty());
+        // send_message should score highest (3 tokens match: slack, send, message)
+        assert_eq!(results[0].name, "slack__send_message");
+    }
 }
