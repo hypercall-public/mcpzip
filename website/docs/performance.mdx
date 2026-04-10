@@ -1,0 +1,226 @@
+---
+sidebar_position: 7.5
+title: Performance
+description: Context window savings, startup time, memory usage, and benchmark analysis
+---
+
+import TokenSavingsCalculator from '@site/src/components/TokenSavingsCalculator';
+import ComparisonTable from '@site/src/components/ComparisonTable';
+
+# Performance
+
+mcpzip is designed to be fast and lightweight. This page covers the performance characteristics you can expect.
+
+## Context Window Savings
+
+The primary benefit of mcpzip is **context window compression**. Here's the math:
+
+| Metric | Without mcpzip | With mcpzip |
+|--------|---------------|-------------|
+| Tool schemas loaded | All (N) | 3 (always) |
+| Tokens per tool schema | ~350 | ~400 (meta-tool) |
+| Total tool tokens (10 servers, 50 tools each) | ~175,000 | ~1,200 |
+| Context overhead | **87.5%** of 200K | **0.6%** of 200K |
+| Savings | -- | **99.3%** |
+
+<details>
+<summary><strong>How does context window compression work?</strong></summary>
+
+Every MCP tool has a **JSON Schema** that describes its parameters. This schema is sent to the AI model in every message as part of the "tool definitions" block.
+
+A typical tool schema looks like this and consumes ~350 tokens:
+
+```json
+{
+  "name": "send_message",
+  "description": "Send a message to a Slack channel or DM",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "channel": {
+        "type": "string",
+        "description": "Channel ID or name (e.g., #general or C01234567)"
+      },
+      "text": {
+        "type": "string",
+        "description": "The message text to send, supports Slack markdown"
+      },
+      "thread_ts": {
+        "type": "string",
+        "description": "Thread timestamp to reply in a thread"
+      },
+      "unfurl_links": {
+        "type": "boolean",
+        "description": "Whether to unfurl URLs in the message"
+      }
+    },
+    "required": ["channel", "text"]
+  }
+}
+```
+
+With 500 tools, that's 500 x 350 = **175,000 tokens** consumed before your conversation even starts.
+
+mcpzip replaces all of those with just 3 meta-tools (~1,200 tokens total). When Claude needs a tool, it searches on demand and loads only the schema it needs.
+
+</details>
+
+### Interactive Calculator
+
+Adjust the sliders to see how many tokens mcpzip saves for your setup:
+
+<TokenSavingsCalculator />
+
+### Real-World Scenarios
+
+<ComparisonTable
+  headers={["Scenario", "Without mcpzip", "With mcpzip"]}
+  rows={[
+    ["Small setup (3 servers, 30 tools)", "10,500 tokens", "1,200 tokens"],
+    ["Medium setup (5 servers, 125 tools)", "43,750 tokens", "1,200 tokens"],
+    ["Large setup (10 servers, 500 tools)", "175,000 tokens", "1,200 tokens"],
+    ["Power user (15 servers, 900 tools)", "315,000 tokens", "1,200 tokens"],
+  ]}
+/>
+
+:::danger Context Window Exhaustion
+With 15+ MCP servers loaded directly, the tool schemas alone can exceed the context window of many models. GPT-4 starts degrading past ~60 tools. Claude handles more, but still pays the latency cost. mcpzip eliminates this problem entirely.
+:::
+
+## Startup Time
+
+```mermaid
+gantt
+    title Startup Timeline
+    dateFormat X
+    axisFormat %Lms
+
+    section Without mcpzip
+    Connect to Server 1           :a1, 0, 2000
+    Connect to Server 2           :a2, 0, 3000
+    Connect to Server 3           :a3, 0, 1500
+    Connect to Server 4           :a4, 0, 4000
+    Connect to Server 5           :a5, 0, 2500
+    List tools (all)              :a6, after a4, 500
+    Ready to serve                :milestone, after a6, 0
+
+    section With mcpzip
+    Load disk cache               :b1, 0, 5
+    Ready to serve                :milestone, after b1, 0
+    Background refresh (async)    :b2, after b1, 4000
+```
+
+| Phase | Without mcpzip | With mcpzip |
+|-------|---------------|-------------|
+| Time to first request | 2-10 seconds | **<5 milliseconds** |
+| Background refresh | N/A | 2-10 seconds (non-blocking) |
+| Catalog available | After all servers connect | **Immediately** (from cache) |
+
+:::tip Instant Start
+mcpzip's disk cache means it's ready to serve within milliseconds. The background refresh updates the catalog without blocking any requests. Even if all upstream servers are down, the cached catalog keeps search and describe working.
+:::
+
+## Search Latency
+
+| Search Type | Latency | When Used |
+|-------------|---------|-----------|
+| Cache hit | **<0.1ms** | Repeated or similar queries |
+| Keyword search | **<1ms** | Always (parallel with LLM) |
+| LLM search (Gemini) | **200-500ms** | When `gemini_api_key` is set |
+| Combined (cache miss) | **200-500ms** | First search with LLM enabled |
+
+```mermaid
+flowchart LR
+    Q[Query] --> CACHE{Cache hit?}
+    CACHE -->|Yes| R1[Result in < 0.1ms]
+    CACHE -->|No| PAR[Parallel Search]
+    PAR --> KW[Keyword: < 1ms]
+    PAR --> LLM[LLM: 200-500ms]
+    KW --> MERGE[Merge]
+    LLM --> MERGE
+    MERGE --> R2[Result in 200-500ms]
+
+    style R1 fill:#1a1a2e,stroke:#5CF53D,color:#5CF53D
+    style R2 fill:#1a1a2e,stroke:#60A5FA,color:#60A5FA
+    style Q fill:#1a1a2e,stroke:#fff,color:#fff
+```
+
+:::info Keyword-Only Mode
+Without a Gemini API key, mcpzip uses keyword search only. This gives you sub-millisecond search latency with good results for direct queries like "slack send message". LLM search adds natural language understanding ("help me post something to the team") at the cost of 200-500ms latency.
+:::
+
+## Memory Usage
+
+| State | Memory |
+|-------|--------|
+| Idle (cached catalog loaded) | ~15 MB |
+| Active (5 stdio connections) | ~20 MB + child processes |
+| Active (5 HTTP connections) | ~18 MB |
+| Peak (catalog refresh) | ~25 MB |
+
+:::note
+stdio connections spawn child processes (e.g., `npx @anthropic/slack-mcp`). Those processes have their own memory usage, typically 30-100MB each depending on the MCP server implementation. mcpzip itself stays lean.
+:::
+
+## Binary Size
+
+| Build | Size |
+|-------|------|
+| mcpzip (Rust, release) | **5.8 MB** |
+| Previous Go version | 11 MB |
+| Typical Node.js MCP server | 50-200 MB (with node_modules) |
+
+The Rust binary is statically linked with no runtime dependencies. It runs on any Linux, macOS, or Windows system without installing anything else.
+
+## Connection Pooling
+
+mcpzip maintains a connection pool with lazy initialization and idle reaping:
+
+| Feature | Behavior |
+|---------|----------|
+| Connection strategy | Lazy (connect on first use) |
+| Idle timeout | 5 minutes (configurable) |
+| Reconnection | Automatic on next request |
+| Concurrent startup | All servers connect in parallel |
+| Per-server timeout | 30 seconds during catalog refresh |
+| Call timeout | 120 seconds (configurable) |
+
+### Why Lazy Connections?
+
+Instead of connecting to all servers at startup, mcpzip connects to each server only when it's first needed. This means:
+
+- **Faster startup** -- no waiting for slow servers
+- **Lower resource usage** -- unused servers don't consume connections
+- **Better fault isolation** -- a broken server doesn't block others
+
+```mermaid
+sequenceDiagram
+    participant C as Claude
+    participant M as mcpzip
+    participant S as Slack MCP
+    participant G as GitHub MCP
+
+    Note over M: Startup - no connections
+
+    C->>M: execute_tool(slack__send_message)
+    Note over M: First use of Slack
+    M->>S: Connect + initialize
+    S-->>M: Connected
+    M->>S: tools/call send_message
+    S-->>M: Result
+    M-->>C: Result
+
+    Note over M: Slack connected, GitHub still disconnected
+
+    C->>M: execute_tool(github__create_issue)
+    Note over M: First use of GitHub
+    M->>G: Connect + initialize
+    G-->>M: Connected
+    M->>G: tools/call create_issue
+    G-->>M: Result
+    M-->>C: Result
+
+    Note over M,G: 5 min idle...
+    Note over M: Idle timeout - close Slack
+    M->>S: Disconnect
+```

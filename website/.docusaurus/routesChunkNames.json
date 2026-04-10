@@ -1,0 +1,50 @@
+{
+  "/mcpzip/docs-a78": {
+    "__comp": "5e95c892",
+    "__context": {
+      "plugin": "aba21aa0"
+    }
+  },
+  "/mcpzip/docs-e2b": {
+    "__comp": "a7bd4aaa",
+    "__props": "cf2dfc79"
+  },
+  "/mcpzip/docs-583": {
+    "__comp": "a94703ab"
+  },
+  "/mcpzip/docs/-aa0": {
+    "__comp": "17896441",
+    "content": "0e384e19"
+  },
+  "/mcpzip/docs/architecture-e19": {
+    "__comp": "17896441",
+    "content": "5281b7a2"
+  },
+  "/mcpzip/docs/configuration-149": {
+    "__comp": "17896441",
+    "content": "9ed00105"
+  },
+  "/mcpzip/docs/contributing-744": {
+    "__comp": "17896441",
+    "content": "4d54d076"
+  },
+  "/mcpzip/docs/getting-started-753": {
+    "__comp": "17896441",
+    "content": "d589d3a7"
+  },
+  "/mcpzip/docs/search-963": {
+    "__comp": "17896441",
+    "content": "bb3a118c"
+  },
+  "/mcpzip/docs/transports-bac": {
+    "__comp": "17896441",
+    "content": "53fc27d9"
+  },
+  "/mcpzip/-39c": {
+    "__comp": "c4f5d8e4",
+    "__context": {
+      "plugin": "a7456010"
+    },
+    "config": "5e9f5e1a"
+  }
+}

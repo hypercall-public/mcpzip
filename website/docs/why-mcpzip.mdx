@@ -1,0 +1,104 @@
+---
+sidebar_position: 1.5
+title: Why mcpzip?
+description: The problem mcpzip solves and why it matters
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import FeatureGrid from '@site/src/components/FeatureGrid';
+import TokenSavingsCalculator from '@site/src/components/TokenSavingsCalculator';
+
+# Why mcpzip?
+
+Every MCP server you add to Claude dumps all its tool schemas into the context window. That sounds harmless until you realize what happens at scale.
+
+## The Problem in Numbers
+
+Let's say you use 5 MCP servers, each exposing 30 tools. That's **150 tool schemas** loaded into Claude's context on **every single message**.
+
+| | Value |
+|---|---|
+| Average tool schema size | ~350 tokens |
+| Tools across 5 servers | 150 |
+| **Total tool overhead** | **52,500 tokens** |
+| Claude's context window | 200,000 tokens |
+| **Context consumed by tools alone** | **26.3%** |
+
+Now add 5 more servers. You're at 300 tools, 105,000 tokens, and **over half your context** is gone before the conversation starts.
+
+:::danger The Real Cost
+Context window tokens aren't free. They increase latency, reduce the space available for your actual conversation, and degrade the model's tool selection accuracy. Research shows LLMs make worse tool choices when presented with more than ~60 options.
+:::
+
+## The Analogy
+
+Think of it this way:
+
+> **Without mcpzip**: Every employee in a 500-person company introduces themselves to every visitor, reciting their full job description and qualifications. The visitor forgets most of it, gets confused, and ends up talking to the wrong person.
+>
+> **With mcpzip**: A receptionist greets the visitor. "Who are you looking for?" The visitor says "someone who can help with payroll." The receptionist directs them to exactly the right person.
+
+mcpzip is the receptionist. It replaces hundreds of self-introductions with three simple interactions: **search**, **describe**, **execute**.
+
+## What mcpzip Does
+
+<FeatureGrid features={[
+  { icon: "compress", title: "Context Compression", description: "Replace hundreds of tool schemas with just 3 meta-tools. 99%+ token savings." },
+  { icon: "search", title: "Smart Search", description: "Keyword + LLM-powered semantic search across all your tools." },
+  { icon: "speed", title: "Instant Startup", description: "Serves from disk cache immediately. Background refresh is non-blocking." },
+  { icon: "plug", title: "All Transports", description: "stdio, HTTP (Streamable HTTP), and legacy SSE. Connect to any MCP server." },
+  { icon: "lock", title: "OAuth 2.1", description: "Browser-based PKCE flow with token persistence. Reuses mcp-remote tokens." },
+  { icon: "refresh", title: "Connection Pool", description: "Lazy connects, idle timeout, automatic reconnection. Zero manual management." },
+  { icon: "box", title: "Single Binary", description: "~5.8MB static binary. No runtime dependencies. Just download and run." },
+  { icon: "key", title: "Auto-Migration", description: "Import your existing Claude Code MCP config in one command." },
+]} />
+
+## Try the Calculator
+
+See how many tokens mcpzip saves for your setup:
+
+<TokenSavingsCalculator />
+
+## Before and After
+
+<ComparisonTable
+  headers={["", "Without mcpzip", "With mcpzip"]}
+  rows={[
+    ["Tools loaded per message", "All 500+", "Just 3"],
+    ["Token overhead", "175,000+", "1,200"],
+    ["Startup time", "2-10 seconds", "< 5 milliseconds"],
+    ["Adding a new server", "More context bloat", "Zero impact"],
+    ["Tool selection accuracy", "Degrades with scale", "Consistent"],
+    ["Search", false, true],
+    ["Connection pooling", false, true],
+    ["Idle timeout management", false, true],
+    ["Background catalog refresh", false, true],
+  ]}
+/>
+
+<details>
+<summary><strong>How does semantic search work?</strong></summary>
+
+When you configure a Gemini API key, mcpzip runs two search strategies in parallel:
+
+1. **Keyword search** -- fast, token-based matching against tool names, descriptions, and parameters. Great for direct queries like "slack send message".
+
+2. **LLM semantic search** -- sends the query and a compact tool catalog to Gemini, which understands natural language intent. Great for queries like "help me schedule a meeting" or "find something to track my tasks".
+
+Results from both are merged, deduplicated, and cached. The semantic search adds ~200-500ms latency but dramatically improves result quality for natural language queries.
+
+</details>
+
+## Who Is mcpzip For?
+
+| You should use mcpzip if... | You might not need mcpzip if... |
+|---|---|
+| You have 3+ MCP servers | You use only 1-2 servers |
+| Your servers have 50+ tools total | Your servers have < 20 tools total |
+| You want faster response times | Context overhead isn't a concern |
+| You use Claude Code daily | You rarely use MCP tools |
+| You value clean context windows | You prefer direct tool access |
+
+:::tip Even With 2 Servers
+Even with just 2 servers, mcpzip's search capability, connection pooling, and instant startup can be worthwhile. The main question is whether your total tool count is high enough to benefit from context compression.
+:::

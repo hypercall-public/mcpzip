@@ -1,4 +1,8 @@
-// https://hypercall.xyz
+// Package config handles loading, parsing, and validating the mcpzip proxy
+// configuration from ~/.config/compressed-mcp-proxy/config.json. It also supports
+// loading Claude Code configurations for migration purposes.
+//
+// See https://hypercall.xyz for more information.
 
 package config
 

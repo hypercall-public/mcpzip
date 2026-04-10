@@ -1,0 +1,334 @@
+---
+sidebar_position: 4
+title: Examples
+description: Real-world mcpzip configurations for common setups
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import ConfigBuilder from '@site/src/components/ConfigBuilder';
+
+# Examples
+
+Real-world configurations for common setups. All configs go in `~/.config/compressed-mcp-proxy/config.json`.
+
+## Interactive Config Builder
+
+Select the servers you use and get a ready-to-use config:
+
+<ConfigBuilder />
+
+---
+
+## Slack + GitHub + Linear
+
+A typical engineering team setup. All three use stdio transport.
+
+```json title="~/.config/compressed-mcp-proxy/config.json"
+{
+  "gemini_api_key": "AIza...",
+  "mcpServers": {
+    "slack": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/slack-mcp"],
+      "env": {
+        "SLACK_TOKEN": "xoxb-your-slack-token"
+      }
+    },
+    "github": {
+      "command": "gh-mcp"
+    },
+    "linear": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/linear-mcp"],
+      "env": {
+        "LINEAR_API_KEY": "lin_api_your-key"
+      }
+    }
+  }
+}
+```
+
+:::tip
+For GitHub, the `gh-mcp` command uses your existing `gh` CLI authentication. No extra tokens needed.
+:::
+
+With this config, Claude can:
+- Search for Slack channels and send messages
+- Create GitHub issues, PRs, and review code
+- Create and update Linear tickets
+
+---
+
+## Multiple Gmail Accounts
+
+Connect multiple Gmail accounts with different names:
+
+```json title="~/.config/compressed-mcp-proxy/config.json"
+{
+  "mcpServers": {
+    "gmail-personal": {
+      "type": "http",
+      "url": "https://gmail.mcp.run/sse",
+      "headers": {
+        "Authorization": "Bearer personal-api-key"
+      }
+    },
+    "gmail-work": {
+      "type": "http",
+      "url": "https://gmail.mcp.run/sse",
+      "headers": {
+        "Authorization": "Bearer work-api-key"
+      }
+    },
+    "gmail-newsletter": {
+      "type": "http",
+      "url": "https://gmail.mcp.run/sse",
+      "headers": {
+        "Authorization": "Bearer newsletter-api-key"
+      }
+    }
+  }
+}
+```
+
+Each Gmail instance gets a unique prefix in tool names:
+- `gmail-personal__send_email`
+- `gmail-work__send_email`
+- `gmail-newsletter__send_email`
+
+When you ask Claude to "send an email from my work account", the search results will include tools from all three accounts, and Claude can pick the right one.
+
+---
+
+## Mixed stdio + HTTP Servers
+
+A power-user setup combining local and remote servers:
+
+<Tabs>
+  <TabItem value="config" label="Config" default>
+
+```json title="~/.config/compressed-mcp-proxy/config.json"
+{
+  "gemini_api_key": "AIza...",
+  "search": {
+    "model": "gemini-2.0-flash",
+    "default_limit": 8
+  },
+  "idle_timeout_minutes": 10,
+  "call_timeout_seconds": 180,
+  "mcpServers": {
+    "slack": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/slack-mcp"],
+      "env": {
+        "SLACK_TOKEN": "xoxb-your-token"
+      }
+    },
+    "github": {
+      "command": "gh-mcp"
+    },
+    "todoist": {
+      "type": "http",
+      "url": "https://todoist.com/mcp"
+    },
+    "notion": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/notion-mcp"],
+      "env": {
+        "NOTION_TOKEN": "ntn_your-token"
+      }
+    },
+    "gmail": {
+      "type": "http",
+      "url": "https://gmail.mcp.run/sse",
+      "headers": {
+        "Authorization": "Bearer your-api-key"
+      }
+    },
+    "telegram": {
+      "type": "http",
+      "url": "https://telegram.mcp.run/mcp"
+    },
+    "linear": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/linear-mcp"],
+      "env": {
+        "LINEAR_API_KEY": "lin_api_your-key"
+      }
+    },
+    "posthog": {
+      "type": "http",
+      "url": "https://posthog.com/mcp"
+    }
+  }
+}
+```
+
+  </TabItem>
+  <TabItem value="claude" label="Claude Code Config">
+
+```json title="~/.claude.json"
+{
+  "mcpServers": {
+    "mcpzip": {
+      "command": "mcpzip",
+      "args": ["serve"]
+    }
+  }
+}
+```
+
+That's it. One entry instead of eight.
+
+  </TabItem>
+</Tabs>
+
+:::info Tool Count
+This config aggregates **500+ tools** from 8 servers behind mcpzip's 3 meta-tools. Without mcpzip, all 500+ tool schemas would be loaded into every message.
+:::
+
+---
+
+## Custom Headers for API Key Auth
+
+Some MCP servers use API key authentication via custom headers:
+
+```json title="~/.config/compressed-mcp-proxy/config.json"
+{
+  "mcpServers": {
+    "analytics": {
+      "type": "http",
+      "url": "https://analytics.example.com/mcp",
+      "headers": {
+        "X-API-Key": "your-analytics-api-key",
+        "X-Workspace-ID": "ws_12345"
+      }
+    },
+    "cms": {
+      "type": "http",
+      "url": "https://cms.example.com/mcp/sse",
+      "headers": {
+        "Authorization": "Bearer your-cms-token"
+      }
+    }
+  }
+}
+```
+
+:::warning
+When `headers` are set, OAuth is skipped entirely. The headers are sent with every request as-is. Make sure your tokens don't expire, or use a long-lived API key.
+:::
+
+---
+
+## OAuth-Authenticated Servers
+
+For servers that support OAuth 2.1, just omit the `headers` field and mcpzip handles authentication automatically:
+
+```json title="~/.config/compressed-mcp-proxy/config.json"
+{
+  "mcpServers": {
+    "todoist": {
+      "type": "http",
+      "url": "https://todoist.com/mcp"
+    },
+    "google-calendar": {
+      "type": "http",
+      "url": "https://calendar.google.com/mcp"
+    }
+  }
+}
+```
+
+On first connection, mcpzip will:
+1. Detect that OAuth is required (401 response)
+2. Open your browser for authorization
+3. Complete the PKCE flow
+4. Persist tokens to `~/.config/compressed-mcp-proxy/auth/`
+5. Reuse tokens on subsequent connections
+
+See the [OAuth](/docs/oauth) page for details.
+
+---
+
+## Full Annotated Config
+
+Every option explained:
+
+```json title="~/.config/compressed-mcp-proxy/config.json"
+{
+  // Gemini API key for semantic search (optional)
+  // Also configurable via GEMINI_API_KEY env var
+  "gemini_api_key": "AIza...",
+
+  // Search engine settings
+  "search": {
+    // Which Gemini model to use (default: gemini-2.0-flash)
+    "model": "gemini-2.0-flash",
+    // How many results to return from search_tools (default: 5)
+    "default_limit": 5
+  },
+
+  // Close idle upstream connections after N minutes (default: 5)
+  "idle_timeout_minutes": 5,
+
+  // Default timeout for tool calls in seconds (default: 120)
+  "call_timeout_seconds": 120,
+
+  // Map of server name -> server config
+  "mcpServers": {
+    // stdio server: spawns a local process
+    "slack": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/slack-mcp"],
+      "env": {
+        "SLACK_TOKEN": "xoxb-..."
+      }
+    },
+
+    // HTTP server with OAuth (no headers = auto OAuth)
+    "todoist": {
+      "type": "http",
+      "url": "https://todoist.com/mcp"
+    },
+
+    // HTTP server with custom auth headers (skips OAuth)
+    "gmail": {
+      "type": "http",
+      "url": "https://gmail.mcp.run/sse",
+      "headers": {
+        "Authorization": "Bearer your-key"
+      }
+    },
+
+    // Legacy SSE server
+    "legacy-service": {
+      "type": "sse",
+      "url": "https://example.com/mcp/sse"
+    }
+  }
+}
+```
+
+:::note JSON Doesn't Support Comments
+The comments above are for illustration. Real JSON configs must not include `//` comments. Use the config as-is without comments.
+:::
+
+---
+
+## Minimal Config
+
+The simplest possible config -- a single stdio server with no optional features:
+
+```json title="~/.config/compressed-mcp-proxy/config.json"
+{
+  "mcpServers": {
+    "github": {
+      "command": "gh-mcp"
+    }
+  }
+}
+```
+
+This gives you keyword-based search over GitHub's tools. Add `gemini_api_key` for semantic search.

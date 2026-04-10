@@ -1,0 +1,27 @@
+{
+  "id": "architecture",
+  "title": "Architecture",
+  "description": "Overview",
+  "source": "@site/docs/architecture.md",
+  "sourceDirName": ".",
+  "slug": "/architecture",
+  "permalink": "/mcpzip/docs/architecture",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/hypercall-public/mcpzip/tree/main/website/docs/architecture.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 5,
+  "frontMatter": {
+    "sidebar_position": 5
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Search",
+    "permalink": "/mcpzip/docs/search"
+  },
+  "next": {
+    "title": "Transports",
+    "permalink": "/mcpzip/docs/transports"
+  }
+}

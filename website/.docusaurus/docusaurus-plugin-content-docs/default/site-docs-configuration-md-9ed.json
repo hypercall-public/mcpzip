@@ -1,0 +1,27 @@
+{
+  "id": "configuration",
+  "title": "Configuration",
+  "description": "mcpzip is configured via a JSON file at ~/.config/compressed-mcp-proxy/config.json.",
+  "source": "@site/docs/configuration.md",
+  "sourceDirName": ".",
+  "slug": "/configuration",
+  "permalink": "/mcpzip/docs/configuration",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/hypercall-public/mcpzip/tree/main/website/docs/configuration.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 3,
+  "frontMatter": {
+    "sidebar_position": 3
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Getting Started",
+    "permalink": "/mcpzip/docs/getting-started"
+  },
+  "next": {
+    "title": "Search",
+    "permalink": "/mcpzip/docs/search"
+  }
+}

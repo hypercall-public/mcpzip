@@ -1,0 +1,24 @@
+{
+  "id": "intro",
+  "title": "Introduction",
+  "description": "mcpzip is an MCP proxy that aggregates multiple upstream MCP servers and exposes them through a Search + Execute pattern. Instead of loading hundreds of tool schemas into your AI's context window, mcpzip gives the model just 3 meta-tools to discover and invoke any tool on demand.",
+  "source": "@site/docs/intro.md",
+  "sourceDirName": ".",
+  "slug": "/",
+  "permalink": "/mcpzip/docs/",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/hypercall-public/mcpzip/tree/main/website/docs/intro.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 1,
+  "frontMatter": {
+    "sidebar_position": 1,
+    "slug": "/"
+  },
+  "sidebar": "docsSidebar",
+  "next": {
+    "title": "Getting Started",
+    "permalink": "/mcpzip/docs/getting-started"
+  }
+}

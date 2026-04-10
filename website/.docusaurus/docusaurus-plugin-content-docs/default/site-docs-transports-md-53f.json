@@ -1,0 +1,27 @@
+{
+  "id": "transports",
+  "title": "Transports",
+  "description": "mcpzip supports three transport types for connecting to upstream MCP servers.",
+  "source": "@site/docs/transports.md",
+  "sourceDirName": ".",
+  "slug": "/transports",
+  "permalink": "/mcpzip/docs/transports",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/hypercall-public/mcpzip/tree/main/website/docs/transports.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 6,
+  "frontMatter": {
+    "sidebar_position": 6
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Architecture",
+    "permalink": "/mcpzip/docs/architecture"
+  },
+  "next": {
+    "title": "Contributing",
+    "permalink": "/mcpzip/docs/contributing"
+  }
+}

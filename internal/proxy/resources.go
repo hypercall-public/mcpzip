@@ -1,4 +1,8 @@
-// https://hypercall.xyz
+// Package proxy implements the core MCP proxy logic. It exposes 3 meta-tools
+// (search_tools, describe_tool, execute_tool) that allow Claude to discover and
+// invoke tools from upstream MCP servers without loading all tool schemas into context.
+//
+// See https://hypercall.xyz for more information.
 
 package proxy
 

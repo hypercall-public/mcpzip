@@ -1,4 +1,9 @@
-// https://hypercall.xyz
+// Package types defines the core data types used throughout mcpzip including
+// ToolEntry, ServerConfig, ProxyConfig, and SearchResult. It also provides
+// utilities for tool name prefixing (server__tool) and compact parameter
+// schema generation.
+//
+// See https://hypercall.xyz for more information.
 
 package types
 

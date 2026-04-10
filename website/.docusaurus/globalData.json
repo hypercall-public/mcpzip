@@ -1,0 +1,63 @@
+{
+  "docusaurus-plugin-content-docs": {
+    "default": {
+      "path": "/mcpzip/docs",
+      "versions": [
+        {
+          "name": "current",
+          "label": "Next",
+          "isLast": true,
+          "path": "/mcpzip/docs",
+          "mainDocId": "intro",
+          "docs": [
+            {
+              "id": "architecture",
+              "path": "/mcpzip/docs/architecture",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "configuration",
+              "path": "/mcpzip/docs/configuration",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "contributing",
+              "path": "/mcpzip/docs/contributing",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "getting-started",
+              "path": "/mcpzip/docs/getting-started",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "intro",
+              "path": "/mcpzip/docs/",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "search",
+              "path": "/mcpzip/docs/search",
+              "sidebar": "docsSidebar"
+            },
+            {
+              "id": "transports",
+              "path": "/mcpzip/docs/transports",
+              "sidebar": "docsSidebar"
+            }
+          ],
+          "draftIds": [],
+          "sidebars": {
+            "docsSidebar": {
+              "link": {
+                "path": "/mcpzip/docs/",
+                "label": "intro"
+              }
+            }
+          }
+        }
+      ],
+      "breadcrumbs": true
+    }
+  }
+}

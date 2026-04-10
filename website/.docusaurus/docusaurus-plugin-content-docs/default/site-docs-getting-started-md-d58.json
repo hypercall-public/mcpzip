@@ -1,0 +1,27 @@
+{
+  "id": "getting-started",
+  "title": "Getting Started",
+  "description": "Installation",
+  "source": "@site/docs/getting-started.md",
+  "sourceDirName": ".",
+  "slug": "/getting-started",
+  "permalink": "/mcpzip/docs/getting-started",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/hypercall-public/mcpzip/tree/main/website/docs/getting-started.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 2,
+  "frontMatter": {
+    "sidebar_position": 2
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Introduction",
+    "permalink": "/mcpzip/docs/"
+  },
+  "next": {
+    "title": "Configuration",
+    "permalink": "/mcpzip/docs/configuration"
+  }
+}

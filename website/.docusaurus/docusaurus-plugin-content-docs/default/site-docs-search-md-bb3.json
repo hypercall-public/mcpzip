@@ -1,0 +1,27 @@
+{
+  "id": "search",
+  "title": "Search",
+  "description": "mcpzip uses a two-tier search system to find relevant tools from your catalog.",
+  "source": "@site/docs/search.md",
+  "sourceDirName": ".",
+  "slug": "/search",
+  "permalink": "/mcpzip/docs/search",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/hypercall-public/mcpzip/tree/main/website/docs/search.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 4,
+  "frontMatter": {
+    "sidebar_position": 4
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Configuration",
+    "permalink": "/mcpzip/docs/configuration"
+  },
+  "next": {
+    "title": "Architecture",
+    "permalink": "/mcpzip/docs/architecture"
+  }
+}

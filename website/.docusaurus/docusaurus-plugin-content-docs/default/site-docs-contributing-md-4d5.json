@@ -1,0 +1,23 @@
+{
+  "id": "contributing",
+  "title": "Contributing",
+  "description": "Contributions are welcome! Here's how to get started.",
+  "source": "@site/docs/contributing.md",
+  "sourceDirName": ".",
+  "slug": "/contributing",
+  "permalink": "/mcpzip/docs/contributing",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/hypercall-public/mcpzip/tree/main/website/docs/contributing.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 7,
+  "frontMatter": {
+    "sidebar_position": 7
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Transports",
+    "permalink": "/mcpzip/docs/transports"
+  }
+}

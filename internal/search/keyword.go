@@ -1,4 +1,9 @@
-// https://hypercall.xyz
+// Package search provides keyword-based and LLM-powered tool search with
+// query caching. The keyword searcher scores tools by token overlap with the query,
+// while the optional Gemini-powered searcher adds semantic understanding of
+// natural language queries.
+//
+// See https://hypercall.xyz for more information.
 
 package search
 

@@ -1,4 +1,8 @@
-// https://hypercall.xyz
+// Package catalog maintains a cached index of all tools from upstream MCP servers.
+// It persists the catalog to disk for instant startup and supports background refresh
+// with merge-on-failure semantics to preserve cached tools when servers are unreachable.
+//
+// See https://hypercall.xyz for more information.
 
 package catalog
 

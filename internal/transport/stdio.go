@@ -1,4 +1,9 @@
-// https://hypercall.xyz
+// Package transport manages connections to upstream MCP servers. It provides
+// a connection pool with lazy connecting, idle timeout, and automatic reconnection.
+// Supported transports include stdio (local processes) and HTTP (remote servers
+// with optional OAuth 2.1 authentication).
+//
+// See https://hypercall.xyz for more information.
 
 package transport
 
