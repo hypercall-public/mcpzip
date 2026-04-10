@@ -10,7 +10,8 @@
 </p>
 
 <p align="center">
-  <a href="https://pkg.go.dev/github.com/hypercall-public/mcpzip"><img src="https://pkg.go.dev/badge/github.com/hypercall-public/mcpzip.svg" alt="Go Reference"></a>
+  <a href="https://crates.io/crates/mcpzip"><img src="https://img.shields.io/crates/v/mcpzip.svg" alt="crates.io"></a>
+  <a href="https://docs.rs/mcpzip"><img src="https://docs.rs/mcpzip/badge.svg" alt="docs.rs"></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
 </p>
 
